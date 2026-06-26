@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>StudyTrack</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#ffffff;--bg2:#f5f5f5;--bg3:#e8e8e8;
+  --text:#1a1a1a;--text2:#555;--text3:#999;
+  --border:rgba(0,0,0,0.09);--border2:rgba(0,0,0,0.18);
+  --accent:#1D9E75;--red:#E24B4A;--radius:8px;
+  --sc1:#9FE1CB;--sc2:#5DCAA5;--sc3:#1D9E75;--sc4:#0F6E56;
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#1c1c1e;--bg2:#2c2c2e;--bg3:#3a3a3c;
+  --text:#f0f0f0;--text2:#aaa;--text3:#666;
+  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.15);
+}}
+body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;user-select:none}
+
+/* Titlebar */
+.titlebar{height:42px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;-webkit-app-region:drag;flex-shrink:0}
+.win-dots{display:flex;gap:7px;-webkit-app-region:no-drag;margin-right:12px}
+.wd{width:12px;height:12px;border-radius:50%;cursor:pointer}.wd:hover{filter:brightness(0.82)}
+.win-title{font-size:12px;font-weight:500;color:var(--text2);flex:1;text-align:center}
+.tab-bar{display:flex;gap:2px;-webkit-app-region:no-drag}
+.tab{font-size:12px;padding:5px 14px;border-radius:6px;border:none;background:transparent;cursor:pointer;color:var(--text2)}
+.tab:hover{background:var(--bg3)}.tab.active{background:var(--bg);color:var(--text);font-weight:500;border:1px solid var(--border2)}
+
+/* Layout */
+.content{flex:1;overflow:hidden}
+.view{display:none;height:100%;overflow-y:auto;padding:18px 22px 22px}
+.view.active{display:block}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px}
+
+/* Stats */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.stat-box{background:var(--bg2);border-radius:var(--radius);padding:12px 14px;border:1px solid var(--border)}
+.stat-lbl{font-size:10px;color:var(--text3);margin-bottom:4px}
+.stat-val{font-size:22px;font-weight:600;line-height:1}
+.stat-sub{font-size:10px;color:var(--text3);margin-top:3px}
+
+/* Auto-track card */
+.at-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px}
+.at-dot{width:10px;height:10px;border-radius:50%;background:var(--bg3);flex-shrink:0;transition:background .3s}
+.at-dot.active{background:#1D9E75;box-shadow:0 0 0 3px rgba(29,158,117,.2)}
+.at-dot.idle{background:#EF9F27;box-shadow:0 0 0 3px rgba(239,159,39,.2)}
+.at-info{flex:1;min-width:0}
+.at-status{font-size:12px;font-weight:500;color:var(--text)}
+.at-detail{font-size:10px;color:var(--text3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.at-time{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--accent)}
+
+/* Manual timer */
+.timer-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px}
+.timer-dig{font-size:26px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;min-width:100px}
+.timer-lbl{font-size:10px;color:var(--text3);margin-top:2px}
+.timer-info{flex:1}
+.timer-btns{display:flex;gap:8px;align-items:center;min-width:0}
+.t-sel{font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);cursor:pointer;flex:1;min-width:120px;max-width:220px;text-overflow:ellipsis}
+.t-btn{padding:6px 14px;border-radius:6px;border:1px solid var(--border2);background:transparent;font-size:12px;cursor:pointer;color:var(--text);white-space:nowrap}
+.t-btn:hover{background:var(--bg3)}.t-btn.stop{border-color:var(--red);color:var(--red)}
+
+/* Section header */
+.sec-hd{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+
+/* Streak */
+.streak-wrap{margin-bottom:16px;overflow-x:auto}
+.streak-inner{display:inline-flex;flex-direction:column}
+.streak-month-row{display:flex;padding-left:26px;margin-bottom:4px}
+.streak-month-row span{font-size:9px;color:var(--text3);flex-shrink:0}
+.streak-day-grid{display:flex}
+.streak-day-label-col{display:flex;flex-direction:column;gap:3px;width:26px}
+.streak-day-lbl{height:13px;font-size:9px;color:var(--text3);line-height:13px}
+.streak-weeks-col{display:flex;gap:3px}
+.streak-week{display:flex;flex-direction:column;gap:3px}
+.s-cell{width:13px;height:13px;border-radius:2px;background:var(--bg3);cursor:pointer;flex-shrink:0}
+.s-cell:hover{outline:2px solid var(--border2)}.s-cell.empty{background:transparent;cursor:default;pointer-events:none}
+.s-cell[data-l="1"]{background:var(--sc1)}.s-cell[data-l="2"]{background:var(--sc2)}
+.s-cell[data-l="3"]{background:var(--sc3)}.s-cell[data-l="4"]{background:var(--sc4)}
+.streak-legend{display:flex;align-items:center;gap:5px;margin-top:8px}
+.sl-cell{width:11px;height:11px;border-radius:2px}
+
+/* Bar chart */
+.bar-chart{display:flex;align-items:flex-end;gap:8px;height:90px;margin-bottom:16px}
+.bar-col{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1}
+.bar-fill{border-radius:3px 3px 0 0;width:100%;min-height:3px}
+.bar-lbl,.bar-val{font-size:9px;color:var(--text3)}
+
+/* Site dist */
+.site-dist{display:flex;flex-direction:column;gap:8px;margin-bottom:4px}
+.sd-row{display:flex;align-items:center;gap:10px}
+.sd-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.sd-name{font-size:12px;color:var(--text2);width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sd-track{flex:1;height:5px;background:var(--bg3);border-radius:99px;overflow:hidden}
+.sd-bar{height:100%;border-radius:99px}
+.sd-time{font-size:10px;color:var(--text3);width:40px;text-align:right}
+
+/* Websites tab */
+.add-row{display:flex;gap:8px;margin-bottom:14px}
+.add-row input{flex:1;font-size:13px;padding:7px 11px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg2);color:var(--text);outline:none}
+.add-row input:focus{border-color:var(--accent)}
+.btn{padding:7px 16px;border-radius:var(--radius);border:1px solid var(--border2);background:transparent;font-size:12px;cursor:pointer;color:var(--text)}
+.btn:hover{background:var(--bg2)}
+.site-cards{display:flex;flex-direction:column;gap:8px}
+.site-card{display:flex;align-items:center;gap:10px;background:var(--bg2);border-radius:var(--radius);padding:11px 14px;border:1px solid var(--border)}
+.sc-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.sc-info{flex:1}.sc-name{font-size:13px;font-weight:500}.sc-dom{font-size:10px;color:var(--text3);margin-top:1px}
+.live-badge{font-size:9px;padding:1px 6px;border-radius:99px;background:var(--accent);color:#fff;margin-left:6px;vertical-align:middle}
+.sc-time{font-size:11px;color:var(--text2)}
+.del-btn{border:none;background:transparent;cursor:pointer;color:var(--text3);font-size:15px;padding:3px 6px;border-radius:4px}
+.del-btn:hover{background:var(--bg3);color:var(--red)}
+
+/* Settings */
+.s-group{background:var(--bg2);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;margin-bottom:12px}
+.s-group-title{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:10px 16px 6px}
+.s-row{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-top:1px solid var(--border)}
+.s-row:first-of-type{border-top:none}
+.s-lbl{font-size:13px;color:var(--text)}.s-sub{font-size:10px;color:var(--text3);margin-top:1px}
+.tog{width:36px;height:20px;border-radius:99px;border:none;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0}
+.tog.on{background:var(--accent)}.tog.off{background:var(--bg3)}
+.tog-th{position:absolute;top:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s}
+.tog.on .tog-th{left:18px}.tog.off .tog-th{left:2px}
+.goal-ctrl{display:flex;align-items:center;gap:8px}
+.goal-btn{width:26px;height:26px;border-radius:6px;border:1px solid var(--border2);background:transparent;cursor:pointer;font-size:16px;color:var(--text)}
+.goal-val{font-size:14px;font-weight:600;min-width:32px;text-align:center}
+.swatches{display:flex;gap:7px}
+.swatch{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid transparent}
+.swatch.sel{border-color:var(--text)}
+
+/* Debug panel */
+.debug-panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.debug-header{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:8px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.debug-body{padding:10px 14px;display:flex;flex-direction:column;gap:8px}
+.debug-row{display:flex;align-items:flex-start;gap:8px;font-size:11px}
+.debug-key{color:var(--text3);min-width:100px;flex-shrink:0}
+.debug-val{color:var(--text);word-break:break-all;font-family:monospace;font-size:11px}
+.debug-log{background:var(--bg3);border-radius:6px;padding:8px 10px;max-height:160px;overflow-y:auto;font-family:monospace;font-size:10px;color:var(--text2)}
+.debug-log-entry{padding:2px 0;border-bottom:1px solid var(--border)}
+.debug-log-entry:last-child{border:none}
+.debug-log-entry .ts{color:var(--text3);margin-right:6px}
+.debug-log-entry .ev{color:var(--accent)}
+.clear-btn{font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid var(--border2);background:transparent;cursor:pointer;color:var(--text3)}
+
+#tooltip{position:fixed;display:none;z-index:999;background:var(--bg);border:1px solid var(--border2);border-radius:6px;padding:4px 10px;font-size:10px;color:var(--text);pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.12);white-space:nowrap}
+</style>
+</head>
+<body>
+
+<div class="titlebar">
+  <div class="win-dots">
+    <div class="wd" style="background:#E24B4A" onclick="window.api.close()" title="Close"></div>
+    <div class="wd" style="background:#EF9F27" onclick="window.api.minimize()" title="Minimize"></div>
+    <div class="wd" style="background:#639922" onclick="window.api.maximize()" title="Maximize"></div>
+  </div>
+  <div class="win-title">StudyTrack</div>
+  <div class="tab-bar">
+    <button class="tab active" onclick="gotoView('dash',this)">Dashboard</button>
+    <button class="tab" onclick="gotoView('sites',this)">Websites</button>
+    <button class="tab" onclick="gotoView('debug',this)">Debug</button>
+    <button class="tab" onclick="gotoView('cfg',this)">Settings</button>
+    <button class="tab" onclick="gotoView('account',this)">Account</button>
+  </div>
+  <button class="tab" style="-webkit-app-region:no-drag;margin-left:8px" onclick="window.api.showStickyNow()" title="Re-open the floating widget">📌 Widget</button>
+</div>
+
+<div class="content">
+
+  <!-- DASHBOARD -->
+  <div class="view active" id="view-dash">
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="stat-lbl">🔥 Current Streak</div>
+        <div class="stat-val" id="s-streak" style="color:#D85A30">–</div>
+        <div class="stat-sub">consecutive days</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-lbl">⏱ Today</div>
+        <div class="stat-val" id="s-today">–</div>
+        <div class="stat-sub" id="s-goal-sub">–</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-lbl">📅 This Week</div>
+        <div class="stat-val" id="s-week">–</div>
+        <div class="stat-sub">last 7 days</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-lbl">🏆 Best Day</div>
+        <div class="stat-val" id="s-record">–</div>
+        <div class="stat-sub" id="s-record-date">–</div>
+      </div>
+    </div>
+
+    <!-- Auto-track status -->
+    <div class="at-card">
+      <div class="at-dot" id="at-dot"></div>
+      <div class="at-info">
+        <div class="at-status" id="at-status">Auto-track: waiting...</div>
+        <div class="at-detail" id="at-detail">Open a tracked website to start</div>
+      </div>
+      <div class="at-time" id="at-time"></div>
+    </div>
+
+    <!-- Manual timer -->
+    <div class="timer-card">
+      <div class="timer-info">
+        <div class="timer-dig" id="timer-dig">00:00:00</div>
+        <div class="timer-lbl" id="timer-lbl">Manual timer — select a site and press Start</div>
+      </div>
+      <div class="timer-btns">
+        <select id="timer-site-sel" class="t-sel"></select>
+        <button class="t-btn" id="timer-toggle-btn" onclick="toggleManualTimer()">▶ Start</button>
+      </div>
+    </div>
+
+    <div class="sec-hd">Study History · 6 months</div>
+    <div class="streak-wrap">
+      <div class="streak-inner">
+        <div class="streak-month-row" id="streakMonthRow"></div>
+        <div class="streak-day-grid">
+          <div class="streak-day-label-col" id="streakDayLabels"></div>
+          <div class="streak-weeks-col" id="streakWeeksCol"></div>
+        </div>
+      </div>
+      <div class="streak-legend">
+        <span style="font-size:9px;color:var(--text3)">Less</span>
+        <div class="sl-cell" style="background:var(--bg3)"></div>
+        <div class="sl-cell" style="background:var(--sc1)"></div>
+        <div class="sl-cell" style="background:var(--sc2)"></div>
+        <div class="sl-cell" style="background:var(--sc3)"></div>
+        <div class="sl-cell" style="background:var(--sc4)"></div>
+        <span style="font-size:9px;color:var(--text3)">More</span>
+      </div>
+    </div>
+
+    <div class="sec-hd">Last 7 Days</div>
+    <div class="bar-chart" id="barChart"></div>
+
+    <div class="sec-hd">Website Breakdown · This Month</div>
+    <div class="site-dist" id="siteDist"></div>
+  </div>
+
+  <!-- WEBSITES -->
+  <div class="view" id="view-sites">
+    <div class="add-row">
+      <input id="siteNameIn" placeholder="Display name, e.g. Udemy" style="max-width:160px"/>
+      <input id="siteDomIn" placeholder="Domain, e.g. udemy.com"/>
+      <input id="siteColorIn" type="color" value="#378ADD" style="width:40px;height:36px;padding:2px;border-radius:6px;border:1px solid var(--border2);cursor:pointer;background:transparent"/>
+      <button class="btn" id="siteSubmitBtn" onclick="addSite()">+ Add</button>
+      <button class="btn" id="siteCancelBtn" onclick="cancelSiteEdit()" style="display:none">Cancel</button>
+    </div>
+    <div class="site-cards" id="siteCards"></div>
+  </div>
+
+  <!-- DEBUG -->
+  <div class="view" id="view-debug">
+    <div class="debug-panel">
+      <div class="debug-header">
+        🔍 Auto-Track Debug Panel
+        <button class="clear-btn" onclick="clearLog()">Clear log</button>
+      </div>
+      <div class="debug-body">
+        <div class="debug-row">
+          <span class="debug-key">Tracking method</span>
+          <span class="debug-val" id="dbg-method">—</span>
+        </div>
+        <div class="debug-row">
+          <span class="debug-key">Active window</span>
+          <span class="debug-val" id="dbg-window">—</span>
+        </div>
+        <div class="debug-row">
+          <span class="debug-key">Matched site</span>
+          <span class="debug-val" id="dbg-matched">None</span>
+        </div>
+        <div class="debug-row">
+          <span class="debug-key">Tracking state</span>
+          <span class="debug-val" id="dbg-state">—</span>
+        </div>
+        <div class="debug-row">
+          <span class="debug-key">Accum. this session</span>
+          <span class="debug-val" id="dbg-accum">0s</span>
+        </div>
+        <div class="debug-row">
+          <span class="debug-key">Today total</span>
+          <span class="debug-val" id="dbg-today">—</span>
+        </div>
+        <div class="debug-row">
+          <span class="debug-key">Idle time (sys)</span>
+          <span class="debug-val" id="dbg-idle">—</span>
+        </div>
+        <div class="debug-row" style="flex-direction:column;gap:4px">
+          <span class="debug-key">Event log</span>
+          <div class="debug-log" id="dbg-log"></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px">
+      <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:10px">How to test auto-tracking</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.7">
+        1. Make sure your website is added in the <b>Websites</b> tab<br>
+        2. Open your browser and go to that site (e.g. coursera.com)<br>
+        3. Keep that browser window <b>focused/in front</b><br>
+        4. Watch <b>Active window</b> above — it should show the page title<br>
+        5. <b>Matched site</b> should change from "None" to the site name<br>
+        6. Every 2 seconds the accum counter ticks up<br>
+        7. Every 30s (or when you switch sites) data saves to disk<br><br>
+        <b>⚠ Common issues:</b><br>
+        • If Active window shows empty → run app as Administrator<br>
+        • If title doesn't contain domain keyword → edit site domain to match title text<br>
+        • Idle pause kicks in after 5 min of no keyboard/mouse input
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="view" id="view-cfg">
+    <div class="s-group">
+      <div class="s-group-title">Display</div>
+      <div class="s-row">
+        <div><div class="s-lbl">Floating widget (sticky)</div><div class="s-sub">Always-on-top timer overlay</div></div>
+        <button class="tog on" id="tog-sticky" onclick="toggleSetting('showSticky',this)"><div class="tog-th"></div></button>
+      </div>
+      <div class="s-row">
+        <div><div class="s-lbl">Streak color</div></div>
+        <div class="swatches">
+          <div class="swatch sel" style="background:#1D9E75" onclick="setColor('green','#9FE1CB','#5DCAA5','#1D9E75','#0F6E56',this)"></div>
+          <div class="swatch" style="background:#378ADD" onclick="setColor('blue','#B5D4F4','#85B7EB','#378ADD','#185FA5',this)"></div>
+          <div class="swatch" style="background:#D4537E" onclick="setColor('pink','#F4C0D1','#ED93B1','#D4537E','#993556',this)"></div>
+          <div class="swatch" style="background:#7F77DD" onclick="setColor('purple','#CECBF6','#AFA9EC','#7F77DD','#534AB7',this)"></div>
+        </div>
+      </div>
+    </div>
+    <div class="s-group">
+      <div class="s-group-title">Auto-Tracking</div>
+      <div class="s-row">
+        <div><div class="s-lbl">Auto-track active window</div><div class="s-sub">Count time when a tracked site is focused</div></div>
+        <button class="tog on" id="tog-auto" onclick="toggleSetting('autoTrack',this)"><div class="tog-th"></div></button>
+      </div>
+      <div class="s-row">
+        <div><div class="s-lbl">Pause when idle</div><div class="s-sub">Stop counting after 5 min of inactivity</div></div>
+        <button class="tog on" id="tog-idle" onclick="toggleSetting('idlePause',this)"><div class="tog-th"></div></button>
+      </div>
+    </div>
+    <div class="s-group">
+      <div class="s-group-title">Goals & Notifications</div>
+      <div class="s-row">
+        <div><div class="s-lbl">Daily goal</div></div>
+        <div class="goal-ctrl">
+          <button class="goal-btn" onclick="adjGoal(-1)">−</button>
+          <span class="goal-val" id="goalVal">3h</span>
+          <button class="goal-btn" onclick="adjGoal(1)">+</button>
+        </div>
+      </div>
+      <div class="s-row">
+        <div><div class="s-lbl">Daily reminder</div><div class="s-sub">Notify if goal not reached by 8 PM</div></div>
+        <button class="tog on" id="tog-notif" onclick="toggleSetting('notifications',this)"><div class="tog-th"></div></button>
+      </div>
+      <div class="s-row">
+        <div><div class="s-lbl">Launch at startup</div></div>
+        <button class="tog off" id="tog-boot" onclick="toggleSetting('startOnBoot',this)"><div class="tog-th"></div></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACCOUNT -->
+  <div class="view" id="view-account">
+    <div class="s-group" id="acc-logged-out">
+      <div class="s-group-title">Đăng nhập để đồng bộ giữa nhiều thiết bị</div>
+      <div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px">
+        <input id="acc-email" type="email" placeholder="Email" style="font-size:13px;padding:7px 11px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg);color:var(--text);outline:none"/>
+        <input id="acc-pass" type="password" placeholder="Mật khẩu (≥6 ký tự)" style="font-size:13px;padding:7px 11px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg);color:var(--text);outline:none"/>
+        <div style="display:flex;gap:8px">
+          <button class="btn" style="flex:1" onclick="window.accAuth.login()">Đăng nhập</button>
+          <button class="btn" style="flex:1" onclick="window.accAuth.signup()">Đăng ký</button>
+        </div>
+        <div id="acc-msg" style="font-size:11px;color:var(--text3)"></div>
+      </div>
+    </div>
+    <div class="s-group" id="acc-logged-in" style="display:none">
+      <div class="s-group-title">Tài khoản</div>
+      <div class="s-row">
+        <div><div class="s-lbl" id="acc-email-lbl">–</div><div class="s-sub" id="acc-sync-lbl">Chưa đồng bộ</div></div>
+        <button class="btn" onclick="window.accAuth.logout()">Đăng xuất</button>
+      </div>
+      <div class="s-row">
+        <div><div class="s-lbl">Đồng bộ dữ liệu</div><div class="s-sub">Sites + lịch sử học giữa các thiết bị</div></div>
+        <button class="btn" onclick="window.accAuth.syncNow()">⟲ Đồng bộ ngay</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+let appData = null, settings = {}, goalH = 3
+let manualRunning = false, manualSecs = 0, manualInterval = null, manualDomain = null
+let debugLog = []
+let currentAutoTrackedSite = null   // siteName auto-track is currently on, or null — used to warn before starting an overlapping manual session
+let editingDomain = null            // domain currently being edited in the Websites tab, or null
+
+function setMethodLabel(method) {
+  const el = document.getElementById('dbg-method')
+  if (!el) return
+  el.textContent = method === 'native' ? '⚡ Native helper (fast)' : '🐢 PowerShell fallback'
+}
+
+// ── Init ─────────────────────────────────────────────────────
+async function init() {
+  appData = await window.api.getData()
+  settings = appData.settings || {}
+  goalH = settings.goalHours || 3
+
+  applySettings()
+  renderStats(appData)
+  buildStreak(appData.sessions || [])
+  buildBarChart(appData.sessions || [])
+  buildSiteDist(appData.sites || [], appData.sessions || [])
+  refreshTimerSiteSelect()
+  setInterval(refreshTimerSiteSelect, 10000)
+  document.getElementById('timer-site-sel').addEventListener('focus', refreshTimerSiteSelect)
+
+  setMethodLabel(appData.trackingMethod)
+  window.api.on('tracking-method', setMethodLabel)
+
+  // ── Events from main process ──
+  window.api.on('auto-track-update', payload => {
+    currentAutoTrackedSite = payload.domain ? payload.siteName : null
+    updateAutoTrackUI(payload)
+    updateDebugPanel(payload)
+  })
+
+  window.api.on('active-window', title => {
+    document.getElementById('dbg-window').textContent = title || '(empty — try running as Administrator)'
+  })
+
+  window.api.on('idle-state', isIdle => {
+    document.getElementById('dbg-idle').textContent = isIdle ? '⚠ IDLE (>5min)' : 'Active'
+    if (isIdle) {
+      document.getElementById('at-dot').className = 'at-dot idle'
+      document.getElementById('at-status').textContent = 'Paused — system idle'
+      document.getElementById('at-detail').textContent = 'Move mouse or press a key to resume'
+      document.getElementById('at-time').textContent = ''
+      dbgLog('idle', 'System idle detected — tracking paused')
+    }
+  })
+
+  window.api.on('stats-updated', payload => {
+    const td = payload.todaySeconds || 0
+    document.getElementById('s-streak').textContent = payload.streak
+    document.getElementById('s-today').textContent = secsToHM(td)
+    const pct = Math.min(100, Math.round(td / (goalH*3600) * 100))
+    document.getElementById('s-goal-sub').textContent = `goal ${goalH}h · ${pct}%`
+    document.getElementById('dbg-today').textContent = secsToHM(td)
+    dbgLog('save', `Session saved — today: ${secsToHM(td)}`)
+  })
+
+  window.api.on('settings-updated', s => { settings = s; goalH = s.goalHours || 3 })
+}
+
+// ── Auto-track UI ─────────────────────────────────────────────
+function updateAutoTrackUI(p) {
+  const dot    = document.getElementById('at-dot')
+  const status = document.getElementById('at-status')
+  const detail = document.getElementById('at-detail')
+  const time   = document.getElementById('at-time')
+
+  if (p.domain) {
+    dot.className = 'at-dot active'
+    status.textContent = `Tracking: ${p.siteName}`
+    detail.textContent = p.title || p.domain
+    time.textContent = secsToHM(p.accumSecs)
+    // update today stat live every second
+    if (p.todaySecs !== undefined) {
+      document.getElementById('s-today').textContent = secsToHM(p.todaySecs)
+      const pct = Math.min(100, Math.round(p.todaySecs / (goalH*3600) * 100))
+      document.getElementById('s-goal-sub').textContent = `goal ${goalH}h · ${pct}%`
+    }
+  } else {
+    dot.className = 'at-dot'
+    status.textContent = 'Auto-track: no study site in focus'
+    detail.textContent = p.title ? `Current: ${p.title}` : 'Open a tracked website to start'
+    time.textContent = ''
+  }
+}
+
+// ── Debug panel ───────────────────────────────────────────────
+function updateDebugPanel(p) {
+  if (p.domain) {
+    document.getElementById('dbg-matched').textContent  = `✅ ${p.siteName} (${p.domain})`
+    document.getElementById('dbg-state').textContent    = '🟢 TRACKING'
+    document.getElementById('dbg-accum').textContent    = `${p.accumSecs}s (${secsToHM(p.accumSecs)})`  // updates every second
+    document.getElementById('dbg-today').textContent    = secsToHM(p.todaySecs)
+    if (p.accumSecs % 10 === 0 && p.accumSecs > 0) dbgLog('tick', `${p.siteName} — ${secsToHM(p.accumSecs)} this session`)
+  } else {
+    document.getElementById('dbg-matched').textContent = '⬜ None'
+    document.getElementById('dbg-state').textContent   = '⚪ Waiting'
+  }
+}
+
+function dbgLog(type, msg) {
+  const ts = new Date().toLocaleTimeString()
+  debugLog.unshift({ ts, type, msg })
+  if (debugLog.length > 50) debugLog.pop()
+  const el = document.getElementById('dbg-log')
+  if (el) {
+    el.innerHTML = debugLog.map(e =>
+      `<div class="debug-log-entry"><span class="ts">${e.ts}</span><span class="ev">[${e.type}]</span> ${e.msg}</div>`
+    ).join('')
+  }
+}
+
+function clearLog() { debugLog = []; document.getElementById('dbg-log').innerHTML = '' }
+
+// ── Views ─────────────────────────────────────────────────────
+function gotoView(id, el) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'))
+  document.getElementById('view-'+id).classList.add('active')
+  if (el) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); el.classList.add('active') }
+  if (id === 'sites') renderSiteCards(appData.sites||[], appData.sessions||[])
+  if (id === 'dash') refreshTimerSiteSelect()
+}
+
+// ── Helpers ───────────────────────────────────────────────────
+function secsToHM(s) {
+  const h=Math.floor(s/3600),m=Math.floor(s%3600/60)
+  return h>0?`${h}h ${m}m`:`${m}m`
+}
+function fmtSecs(s) {
+  return [Math.floor(s/3600),Math.floor(s%3600/60),s%60].map(v=>String(v).padStart(2,'0')).join(':')
+}
+// Local calendar date — must match main.js's todayStr() exactly, or "today"
+// totals desync around the UTC day-boundary (toISOString is UTC-based).
+function todayStr() { return dateStr(new Date()) }
+function dateStr(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` }
+function monthStr(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` }
+
+// ── Stats ─────────────────────────────────────────────────────
+function renderStats(data) {
+  const sessions = data.sessions||[]
+  document.getElementById('s-streak').textContent = data.streak||0
+  const todaySecs = data.todaySeconds||0
+  document.getElementById('s-today').textContent = secsToHM(todaySecs)
+  const pct = Math.min(100,Math.round(todaySecs/(goalH*3600)*100))
+  document.getElementById('s-goal-sub').textContent = `goal ${goalH}h · ${pct}%`
+  const cutoff=new Date(); cutoff.setDate(cutoff.getDate()-7)
+  const weekSecs=sessions.filter(s=>new Date(s.date)>=cutoff).reduce((a,s)=>a+s.seconds,0)
+  document.getElementById('s-week').textContent = secsToHM(weekSecs)
+  const byDate={}
+  sessions.forEach(s=>{byDate[s.date]=(byDate[s.date]||0)+s.seconds})
+  const entries=Object.entries(byDate)
+  if(entries.length){
+    const [rd,rs]=entries.reduce((a,b)=>b[1]>a[1]?b:a)
+    document.getElementById('s-record').textContent=secsToHM(rs)
+    document.getElementById('s-record-date').textContent=new Date(rd).toLocaleDateString('en-US',{month:'short',day:'numeric'})
+  }else{
+    document.getElementById('s-record').textContent='–'
+    document.getElementById('s-record-date').textContent='–'
+  }
+}
+
+// ── Streak ───────────────────────────────────────────────────
+// Perfect rectangle, WEEKS columns × 7 rows — no partial leading/trailing
+// weeks like GitHub's grid. Today is always the bottom cell of the last
+// (right-most) column.
+function buildStreak(sessions) {
+  const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  const WEEKDAY_SHORT=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+  const byDate={}
+  sessions.forEach(s=>{byDate[s.date]=(byDate[s.date]||0)+s.seconds})
+  const WEEKS=26, today=new Date(), totalDays=WEEKS*7
+  const days=[]
+  for(let i=totalDays-1;i>=0;i--){
+    const d=new Date(today); d.setDate(today.getDate()-i)
+    const ds=dateStr(d)
+    const secs=byDate[ds]||0
+    let lv=0
+    if(secs>0) lv=secs<1800?1:secs<5400?2:secs<10800?3:4
+    days.push({d,ds,secs,lv,dow:d.getDay()})
+  }
+  // totalDays is an exact multiple of 7, so slicing sequentially into
+  // columns of 7 lands "today" (the last entry) on the bottom row of the
+  // last column automatically.
+  const weeksArr=[]
+  for(let c=0;c<WEEKS;c++) weeksArr.push(days.slice(c*7,c*7+7))
+  const firstDow=days[0].dow   // weekday shown on row 0 (top row)
+
+  const CELL_W=16
+  const monthRow=document.getElementById('streakMonthRow'); monthRow.innerHTML=''
+  let lastM=-1
+  weeksArr.forEach(w=>{
+    const sp=document.createElement('span')
+    sp.style.cssText=`width:${CELL_W}px;display:inline-block;overflow:visible`
+    const m=w[0].d.getMonth()
+    if(m!==lastM){sp.textContent=MONTHS[m];lastM=m}
+    monthRow.appendChild(sp)
+  })
+
+  const dayLabelCol=document.getElementById('streakDayLabels'); dayLabelCol.innerHTML=''
+  for(let r=0;r<7;r++){
+    const wd=(firstDow+r)%7
+    const lbl=(wd===1||wd===3||wd===5)?WEEKDAY_SHORT[wd]:''
+    const d=document.createElement('div'); d.className='streak-day-lbl'; d.textContent=lbl
+    dayLabelCol.appendChild(d)
+  }
+
+  const weeksCol=document.getElementById('streakWeeksCol'); weeksCol.innerHTML=''
+  weeksArr.forEach(w=>{
+    const col=document.createElement('div'); col.className='streak-week'
+    w.forEach(day=>{
+      const cell=document.createElement('div')
+      cell.className='s-cell'
+      if(day.lv>0) cell.setAttribute('data-l',day.lv)
+      cell.addEventListener('mouseenter',e=>{
+        const tip=document.getElementById('tooltip')
+        tip.style.display='block'
+        tip.style.left=(e.clientX+12)+'px'
+        tip.style.top=(e.clientY-32)+'px'
+        tip.textContent=day.d.toLocaleDateString('en-US',{month:'short',day:'numeric'})
+          +' · '+(day.lv===0?'No study':secsToHM(day.secs))
+      })
+      cell.addEventListener('mouseleave',()=>{document.getElementById('tooltip').style.display='none'})
+      col.appendChild(cell)
+    })
+    weeksCol.appendChild(col)
+  })
+}
+
+// ── Bar chart ─────────────────────────────────────────────────
+function buildBarChart(sessions) {
+  const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+  const today=new Date(), data=[]
+  for(let i=6;i>=0;i--){
+    const d=new Date(today); d.setDate(today.getDate()-i)
+    const ds=dateStr(d)
+    const secs=sessions.filter(s=>s.date===ds).reduce((a,s)=>a+s.seconds,0)
+    data.push({lbl:DAYS[d.getDay()],secs})
+  }
+  const maxS=Math.max(...data.map(d=>d.secs),1)
+  const wrap=document.getElementById('barChart'); wrap.innerHTML=''
+  data.forEach(d=>{
+    const col=document.createElement('div'); col.className='bar-col'
+    const vl=document.createElement('div'); vl.className='bar-val'; vl.textContent=d.secs>0?secsToHM(d.secs):'–'
+    const fill=document.createElement('div'); fill.className='bar-fill'
+    fill.style.height=(d.secs===0?3:Math.max(6,Math.round(d.secs/maxS*72)))+'px'
+    fill.style.background=d.secs>=goalH*3600?'var(--sc3)':d.secs>0?'var(--sc1)':'var(--bg3)'
+    const lb=document.createElement('div'); lb.className='bar-lbl'; lb.textContent=d.lbl
+    col.appendChild(vl);col.appendChild(fill);col.appendChild(lb); wrap.appendChild(col)
+  })
+}
+
+// ── Site dist ─────────────────────────────────────────────────
+// Stable color per domain, picked by hashing the string — so a domain not in
+// the tracked `sites` list (e.g. studied once via the manual timer) still
+// gets a consistent color across re-renders instead of a random one each time.
+const ADHOC_PALETTE = ['#E07A5F','#81B29A','#F2CC8F','#3D5A80','#A8DADC','#C77DFF','#F4A261','#6D6875']
+function colorForDomain(domain) {
+  let h = 0
+  for (let i = 0; i < domain.length; i++) h = (h * 31 + domain.charCodeAt(i)) >>> 0
+  return ADHOC_PALETTE[h % ADHOC_PALETTE.length]
+}
+
+function buildSiteDist(sites,sessions) {
+  const thisMonth=monthStr(new Date())
+  const bySite={}
+  sessions.filter(s=>s.date.startsWith(thisMonth)).forEach(s=>{bySite[s.domain]=(bySite[s.domain]||0)+s.seconds})
+  // Show every domain that has sessions this month, not just ones already
+  // added to the Websites tab — manual-timer sessions on a one-off site
+  // would otherwise never show up here.
+  const known = new Set(sites.map(s=>s.domain))
+  const rows = [...sites]
+  Object.keys(bySite).forEach(domain => {
+    if (!known.has(domain)) rows.push({ name: domain, domain, color: colorForDomain(domain) })
+  })
+  const el=document.getElementById('siteDist'); el.innerHTML=''
+  const totalSecs=Object.values(bySite).reduce((a,v)=>a+v,0)||1
+  rows.forEach(site=>{
+    const secs=bySite[site.domain]||0, pct=Math.round(secs/totalSecs*100)
+    el.innerHTML+=`<div class="sd-row">
+      <div class="sd-dot" style="background:${site.color}"></div>
+      <span class="sd-name">${escapeHtml(site.name)}</span>
+      <div class="sd-track"><div class="sd-bar" style="width:${pct}%;background:${site.color}"></div></div>
+      <span class="sd-time">${secs>0?secsToHM(secs):'–'}</span>
+    </div>`
+  })
+  if(!rows.length) el.innerHTML='<span style="font-size:12px;color:var(--text3)">No websites added yet.</span>'
+}
+
+// ── Manual timer ──────────────────────────────────────────────
+// Dropdown lists currently-open browser tabs/windows that are NOT already
+// covered by an auto-tracked site (those track themselves automatically).
+// Use this for one-off sites you study on but don't want to add permanently.
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+}
+
+let currentOpenTabs = []   // index-matched to the dropdown's option values
+
+async function refreshTimerSiteSelect() {
+  if (manualRunning) return   // don't disturb the dropdown mid-session
+  // Walking the UI Automation tree isn't free — skip it while the user isn't
+  // even looking at the Dashboard (the only view with this control).
+  if (!document.getElementById('view-dash').classList.contains('active')) return
+  const sel = document.getElementById('timer-site-sel')
+  const prevVal = sel.options[sel.selectedIndex]?.dataset.title
+  currentOpenTabs = await window.api.getOpenTabs()
+  sel.innerHTML = '<option value="">-- Select an open tab --</option>'
+  currentOpenTabs.forEach((t, i) => {
+    const label = t.domain ? `${t.title} (${t.domain})` : t.title
+    sel.innerHTML += `<option value="${i}" data-title="${escapeHtml(t.title)}">${escapeHtml(label)}</option>`
+  })
+  if (prevVal) {
+    const idx = currentOpenTabs.findIndex(t => t.title === prevVal)
+    if (idx !== -1) sel.value = idx
+  }
+}
+
+function toggleManualTimer() {
+  const sel=document.getElementById('timer-site-sel')
+  const btn=document.getElementById('timer-toggle-btn')
+  if(!manualRunning){
+    if(!sel.value){alert('Please select an open tab first!');return}
+    if(currentAutoTrackedSite){
+      const ok = confirm(`Auto-track đang ghi nhận cho "${currentAutoTrackedSite}". Bạn vẫn muốn bắt đầu đếm giờ thủ công cho mục khác?`)
+      if(!ok) return
+    }
+    const tab = currentOpenTabs[Number(sel.value)]
+    // Use the real domain read from the browser's address bar when we have
+    // one, so the session lands in Website Breakdown under a real site
+    // instead of the raw (non-domain) tab title.
+    manualDomain = tab.domain || tab.title
+    const siteName = tab.domain || tab.title
+    manualRunning=true
+    sel.disabled=true
+    btn.textContent='⏹ Stop'; btn.className='t-btn stop'
+    document.getElementById('timer-lbl').textContent=`${siteName} · studying`
+    dbgLog('manual','Manual timer started for '+siteName)
+    manualInterval=setInterval(()=>{
+      manualSecs++
+      document.getElementById('timer-dig').textContent=fmtSecs(manualSecs)
+    },1000)
+  } else {
+    clearInterval(manualInterval)
+    manualRunning=false
+    sel.disabled=false
+    btn.textContent='▶ Start'; btn.className='t-btn'
+    const saved=manualSecs
+    dbgLog('manual',`Manual timer stopped — saving ${secsToHM(saved)}`)
+    document.getElementById('timer-lbl').textContent=`Saved ${secsToHM(saved)}`
+    window.api.logSession({domain:manualDomain,seconds:saved,manual:true}).then(payload=>{
+      document.getElementById('s-streak').textContent=payload.streak
+      document.getElementById('s-today').textContent=secsToHM(payload.todaySeconds)
+      const pct=Math.min(100,Math.round(payload.todaySeconds/(goalH*3600)*100))
+      document.getElementById('s-goal-sub').textContent=`goal ${goalH}h · ${pct}%`
+      document.getElementById('dbg-today').textContent=secsToHM(payload.todaySeconds)
+      buildBarChart(appData.sessions||[])
+      dbgLog('save','Session saved — today: '+secsToHM(payload.todaySeconds))
+    })
+    manualSecs=0
+    document.getElementById('timer-dig').textContent='00:00:00'
+    refreshTimerSiteSelect()
+  }
+}
+
+// ── Sites ─────────────────────────────────────────────────────
+function renderSiteCards(sites,sessions) {
+  const today=todayStr(), todayBySite={}
+  sessions.filter(s=>s.date===today).forEach(s=>{todayBySite[s.domain]=(todayBySite[s.domain]||0)+s.seconds})
+  const el=document.getElementById('siteCards'); el.innerHTML=''
+  sites.forEach(s=>{
+    const secs=todayBySite[s.domain]||0
+    el.innerHTML+=`<div class="site-card">
+      <div class="sc-dot" style="background:${s.color}"></div>
+      <div class="sc-info">
+        <div class="sc-name">${escapeHtml(s.name)}</div>
+        <div class="sc-dom">${escapeHtml(s.domain)}</div>
+      </div>
+      <span class="sc-time">${secs>0?secsToHM(secs)+' today':'No sessions yet'}</span>
+      <button class="del-btn" onclick="startEditSite('${s.domain}')" title="Edit">✎</button>
+      <button class="del-btn" onclick="removeSite('${s.domain}')" title="Remove">✕</button>
+    </div>`
+  })
+  if(!sites.length) el.innerHTML='<span style="font-size:12px;color:var(--text3)">No websites yet. Add one above!</span>'
+}
+
+function startEditSite(domain) {
+  const site = (appData.sites||[]).find(s => s.domain === domain)
+  if (!site) return
+  editingDomain = domain
+  document.getElementById('siteNameIn').value = site.name
+  document.getElementById('siteDomIn').value = site.domain
+  document.getElementById('siteColorIn').value = site.color
+  document.getElementById('siteSubmitBtn').textContent = '💾 Save'
+  document.getElementById('siteCancelBtn').style.display = ''
+}
+
+function cancelSiteEdit() {
+  editingDomain = null
+  document.getElementById('siteNameIn').value = ''
+  document.getElementById('siteDomIn').value = ''
+  document.getElementById('siteSubmitBtn').textContent = '+ Add'
+  document.getElementById('siteCancelBtn').style.display = 'none'
+}
+
+async function addSite() {
+  const name=document.getElementById('siteNameIn').value.trim()
+  const domain=document.getElementById('siteDomIn').value.trim()
+  const color=document.getElementById('siteColorIn').value
+  if(!name||!domain) return
+  const sites = editingDomain
+    ? await window.api.updateSite(editingDomain, {name,domain,color})
+    : await window.api.addSite({name,domain,color})
+  appData.sites=sites
+  cancelSiteEdit()
+  renderSiteCards(sites,appData.sessions||[])
+  refreshTimerSiteSelect()
+  buildSiteDist(sites,appData.sessions||[])
+}
+
+async function removeSite(domain) {
+  const sites=await window.api.removeSite(domain)
+  appData.sites=sites
+  if (editingDomain === domain) cancelSiteEdit()
+  renderSiteCards(sites,appData.sessions||[])
+  refreshTimerSiteSelect()
+  buildSiteDist(sites,appData.sessions||[])
+}
+
+// ── Settings ──────────────────────────────────────────────────
+function applySettings() {
+  document.getElementById('goalVal').textContent=goalH+'h'
+  syncToggle('tog-sticky',settings.showSticky!==false)
+  syncToggle('tog-auto',settings.autoTrack!==false)
+  syncToggle('tog-idle',settings.idlePause!==false)
+  syncToggle('tog-notif',settings.notifications!==false)
+  syncToggle('tog-boot',!!settings.startOnBoot)
+  if(settings.streakColor){
+    const m={green:['#9FE1CB','#5DCAA5','#1D9E75','#0F6E56'],blue:['#B5D4F4','#85B7EB','#378ADD','#185FA5'],pink:['#F4C0D1','#ED93B1','#D4537E','#993556'],purple:['#CECBF6','#AFA9EC','#7F77DD','#534AB7']}
+    const c=m[settings.streakColor]; if(c) applyStreakColors(...c)
+  }
+}
+function syncToggle(id,val){const el=document.getElementById(id);if(!el)return;el.classList.toggle('on',val);el.classList.toggle('off',!val)}
+async function toggleSetting(key,el){el.classList.toggle('on');el.classList.toggle('off');settings[key]=el.classList.contains('on');settings.goalHours=goalH;await window.api.saveSettings(settings)}
+function adjGoal(d){goalH=Math.max(1,Math.min(12,goalH+d));document.getElementById('goalVal').textContent=goalH+'h';settings.goalHours=goalH;window.api.saveSettings(settings)}
+function applyStreakColors(c1,c2,c3,c4){const r=document.documentElement;r.style.setProperty('--sc1',c1);r.style.setProperty('--sc2',c2);r.style.setProperty('--sc3',c3);r.style.setProperty('--sc4',c4)}
+function setColor(name,c1,c2,c3,c4,sw){document.querySelectorAll('.swatch').forEach(s=>s.classList.remove('sel'));sw.classList.add('sel');applyStreakColors(c1,c2,c3,c4);settings.streakColor=name;settings.goalHours=goalH;window.api.saveSettings(settings)}
+
+init()
+</script>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'
+import {
+  getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  signOut, onAuthStateChanged
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'
+import {
+  getFirestore, doc, getDoc, setDoc
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
+import { firebaseConfig } from './firebase-config.js'
+
+const fbApp  = initializeApp(firebaseConfig)
+const auth   = getAuth(fbApp)
+const db     = getFirestore(fbApp)
+let syncing  = false
+let autoSyncInterval = null
+
+// Sessions are tagged with the recording device's id (main.js DEVICE_ID), so
+// merging is a dedup-union keyed by (domain,date,manual,device) instead of
+// summing — running this repeatedly on every periodic sync stays idempotent
+// and never double-counts a device's own seconds.
+function sessionKey(s) { return `${s.domain}|${s.date}|${!!s.manual}|${s.device || 'legacy'}` }
+function mergeSessions(local, cloud) {
+  const map = new Map()
+  ;[...(cloud || []), ...(local || [])].forEach(s => map.set(sessionKey(s), s))
+  return [...map.values()]
+}
+function mergeSites(local, cloud) {
+  const map = new Map()
+  ;[...(cloud || []), ...(local || [])].forEach(s => map.set(s.domain, s))
+  return [...map.values()]
+}
+
+async function syncWithCloud(uid) {
+  if (syncing) return
+  syncing = true
+  try {
+    // appData.sessions in this renderer is only refreshed at init() / after a
+    // previous sync — main.js keeps accumulating seconds via its own periodic
+    // flush in between. Merging from that stale snapshot and writing the
+    // result back via applySyncedData would clobber main's newer totals
+    // (perceived as time "jumping back"/not accumulating). Pull the current
+    // truth from main right before merging instead.
+    const fresh = await window.api.getData()
+    const ref = doc(db, 'users', uid)
+    const snap = await getDoc(ref)
+    const cloud = snap.exists() ? snap.data() : { sites: [], sessions: [] }
+    const mergedSessions = mergeSessions(fresh.sessions || [], cloud.sessions || [])
+    const mergedSites    = mergeSites(fresh.sites || [], cloud.sites || [])
+
+    await setDoc(ref, { sites: mergedSites, sessions: mergedSessions, updatedAt: Date.now() })
+
+    const stats = await window.api.applySyncedData({ sites: mergedSites, sessions: mergedSessions })
+    appData.sites = mergedSites
+    appData.sessions = mergedSessions
+    appData.todaySeconds = stats.todaySeconds
+    appData.streak = stats.streak
+    renderStats(appData)
+    buildStreak(mergedSessions)
+    buildBarChart(mergedSessions)
+    buildSiteDist(mergedSites, mergedSessions)
+    if (document.getElementById('view-sites').classList.contains('active')) renderSiteCards(mergedSites, mergedSessions)
+
+    const lbl = document.getElementById('acc-sync-lbl')
+    if (lbl) lbl.textContent = 'Đã đồng bộ lúc ' + new Date().toLocaleTimeString()
+  } catch (e) {
+    const lbl = document.getElementById('acc-sync-lbl')
+    if (lbl) lbl.textContent = 'Lỗi đồng bộ: ' + (e.message || e)
+  } finally {
+    syncing = false
+  }
+}
+
+function setAccMsg(msg) { const el = document.getElementById('acc-msg'); if (el) el.textContent = msg || '' }
+
+onAuthStateChanged(auth, user => {
+  document.getElementById('acc-logged-out').style.display = user ? 'none' : ''
+  document.getElementById('acc-logged-in').style.display  = user ? '' : 'none'
+  if (autoSyncInterval) { clearInterval(autoSyncInterval); autoSyncInterval = null }
+  if (user) {
+    document.getElementById('acc-email-lbl').textContent = user.email
+    syncWithCloud(user.uid)
+    autoSyncInterval = setInterval(() => syncWithCloud(user.uid), 30000)
+  }
+})
+
+window.accAuth = {
+  async login() {
+    setAccMsg('')
+    try {
+      await signInWithEmailAndPassword(auth, document.getElementById('acc-email').value.trim(), document.getElementById('acc-pass').value)
+    } catch (e) { setAccMsg(e.message) }
+  },
+  async signup() {
+    setAccMsg('')
+    try {
+      await createUserWithEmailAndPassword(auth, document.getElementById('acc-email').value.trim(), document.getElementById('acc-pass').value)
+    } catch (e) { setAccMsg(e.message) }
+  },
+  async logout() {
+    if (auth.currentUser) await syncWithCloud(auth.currentUser.uid)   // final push before leaving
+    await signOut(auth)
+  },
+  syncNow() {
+    if (auth.currentUser) syncWithCloud(auth.currentUser.uid)
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:rgba(255,255,255,0.96);--bg2:rgba(240,240,240,0.92);
+  --text:#1a1a1a;--text2:#666;--text3:#aaa;
+  --border:rgba(0,0,0,0.13);--accent:#1D9E75;
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:rgba(28,28,30,0.96);--bg2:rgba(50,50,52,0.92);
+  --text:#f0f0f0;--text2:#aaa;--text3:#666;--border:rgba(255,255,255,0.11);
+}}
+html,body{background:transparent;font-family:-apple-system,'Segoe UI',sans-serif;width:200px;height:230px;overflow:hidden;user-select:none}
+
+.widget{
+  background:var(--bg);border:1px solid var(--border);border-radius:14px;
+  padding:11px 13px 13px;width:200px;
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  box-shadow:0 4px 24px rgba(0,0,0,.18);
+}
+
+/* Header */
+.hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;cursor:move}
+.hd-left{display:flex;align-items:center;gap:5px}
+.hd-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0;transition:background .3s}
+.hd-dot.on{background:var(--accent);box-shadow:0 0 0 2px rgba(29,158,117,.25)}
+.hd-dot.idle{background:#EF9F27}
+.hd-title{font-size:11px;font-weight:600;color:var(--text2)}
+.hd-close{
+  width:16px;height:16px;border-radius:50%;border:none;
+  background:rgba(226,75,74,0.15);cursor:pointer;color:#E24B4A;
+  font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;
+  -webkit-app-region:no-drag;transition:background .15s;flex-shrink:0;
+  line-height:1;
+}
+.hd-close:hover{background:rgba(226,75,74,0.35)}
+
+/* Timer — this is the main number, counts up every second */
+.timer{
+  font-size:34px;font-weight:600;letter-spacing:-.03em;
+  color:var(--text);text-align:center;font-variant-numeric:tabular-nums;
+  line-height:1;margin:2px 0 4px;
+}
+
+/* Current site label */
+.site-row{display:flex;align-items:center;gap:5px;margin-bottom:10px;min-height:14px}
+.site-lbl{font-size:10px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;text-align:center}
+
+/* Today progress */
+.prog-section{}
+.prog-lbl{display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-bottom:3px}
+.prog-right{display:flex;gap:6px}
+.track{height:5px;background:var(--bg2);border-radius:99px;overflow:hidden}
+.fill{height:100%;border-radius:99px;background:var(--accent);transition:width .4s}
+
+/* Open btn */
+.open-btn{
+  width:100%;margin-top:10px;font-size:11px;font-weight:500;padding:5px;
+  border-radius:7px;border:1px solid var(--border);background:var(--bg2);
+  cursor:pointer;color:var(--text);-webkit-app-region:no-drag;
+}
+.open-btn:hover{opacity:.8}
+</style>
+</head>
+<body>
+<div class="widget">
+  <div class="hd">
+    <div class="hd-left">
+      <div class="hd-dot" id="hdDot"></div>
+      <span class="hd-title">StudyTrack</span>
+    </div>
+    <button class="hd-close" onclick="window.api.closeSticky()" title="Close widget">✕</button>
+  </div>
+
+  <!-- Big timer: counts up every second, shows today's total study time -->
+  <div class="timer" id="timer">00:00:00</div>
+
+  <!-- Current site being tracked -->
+  <div class="site-row">
+    <span class="site-lbl" id="siteLbl">—</span>
+  </div>
+
+  <!-- Today progress toward goal -->
+  <div class="prog-section">
+    <div class="prog-lbl">
+      <span>Today</span>
+      <div class="prog-right">
+        <span id="todayHM">0m</span>
+        <span id="pctLbl">0%</span>
+      </div>
+    </div>
+    <div class="track"><div class="fill" id="fill" style="width:0%"></div></div>
+  </div>
+
+  <button class="open-btn" onclick="window.api.openMain()">Open Dashboard</button>
+</div>
+
+<script>
+let goalSecs      = 3 * 3600
+let savedSecs     = 0    // seconds already in sessions[] for today
+let liveAutoSecs  = 0    // current auto-track session (not yet saved), from main
+let manualSecs    = 0    // current manual session running in renderer
+let manualRunning = false
+
+// The clock that drives the big timer number
+// Runs every second; adds 1 if we are actively tracking (auto or manual)
+let lastTickMs  = Date.now()
+let isTracking  = false   // true when auto-track has an active site
+
+function fmt(s) {
+  s = Math.max(0, s)
+  return [Math.floor(s/3600), Math.floor(s%3600/60), s%60]
+    .map(v => String(v).padStart(2,'0')).join(':')
+}
+function secsToHM(s) {
+  s = Math.max(0, s)
+  const h = Math.floor(s/3600), m = Math.floor(s%3600/60)
+  return h > 0 ? `${h}h ${m}m` : `${m}m`
+}
+
+// Total seconds to show = saved + current live auto session + manual if running
+function totalDisplay() {
+  return savedSecs + liveAutoSecs + (manualRunning ? manualSecs : 0)
+}
+
+function refreshUI() {
+  const total = totalDisplay()
+  document.getElementById('timer').textContent   = fmt(total)
+  document.getElementById('todayHM').textContent = secsToHM(total)
+  const pct = Math.min(100, Math.round(total / goalSecs * 100))
+  document.getElementById('pctLbl').textContent  = pct + '%'
+  document.getElementById('fill').style.width    = pct + '%'
+}
+
+// Called every second by setInterval — increments liveAutoSecs if tracking
+setInterval(() => {
+  if (isTracking) {
+    liveAutoSecs++
+    refreshUI()
+  } else if (manualRunning) {
+    manualSecs++
+    refreshUI()
+  }
+}, 1000)
+
+// ── Events from main ─────────────────────────────────────────
+
+window.api.on('auto-track-update', p => {
+  if (p.domain) {
+    isTracking = true
+    // IMPORTANT: must use liveUnflushed (seconds not yet on disk), NOT accumSecs
+    // (which is the whole session's total and keeps growing across periodic
+    // flushes). savedSecs already includes everything flushed so far, so adding
+    // the full accumSecs on top double-counts that part every ~30s flush —
+    // that's what caused the widget to briefly dip then jump far ahead.
+    liveAutoSecs = p.liveUnflushed ?? 0
+    document.getElementById('hdDot').className  = 'hd-dot on'
+    document.getElementById('siteLbl').textContent = `● ${p.siteName}`
+  } else {
+    if (isTracking) {
+      // just left a study site — liveAutoSecs will be flushed by main
+      // reset so we don't double count after flush
+      liveAutoSecs = 0
+    }
+    isTracking = false
+    document.getElementById('hdDot').className     = 'hd-dot'
+    document.getElementById('siteLbl').textContent = 'No study site in focus'
+  }
+  refreshUI()
+})
+
+// Fired after main flushes a session to disk (auto or manual)
+window.api.on('stats-updated', p => {
+  savedSecs    = p.todaySeconds || 0
+  liveAutoSecs = 0   // main already counted these in savedSecs
+  refreshUI()
+})
+
+window.api.on('idle-state', isIdle => {
+  if (isIdle) {
+    isTracking = false
+    document.getElementById('hdDot').className     = 'hd-dot idle'
+    document.getElementById('siteLbl').textContent = '⏸ Idle — paused'
+    liveAutoSecs = 0
+    refreshUI()
+  }
+})
+
+window.api.on('settings-updated', s => {
+  goalSecs = (s.goalHours || 3) * 3600
+  refreshUI()
+})
+
+// ── Drag header to move widget ────────────────────────────────
+document.querySelector('.hd').addEventListener('mousedown', e => {
+  if (e.target.closest('.hd-close')) return
+  window.api.stickyDragStart()
+})
+document.addEventListener('mouseup', () => window.api.stickyDragEnd())
+
+// ── Init ─────────────────────────────────────────────────────
+async function init() {
+  const data  = await window.api.getData()
+  goalSecs    = (data.settings?.goalHours || 3) * 3600
+  savedSecs   = data.todaySeconds || 0
+  refreshUI()
+  document.getElementById('siteLbl').textContent = 'Waiting for activity...'
+}
+init()
+</script>
+</body>
+</html>
