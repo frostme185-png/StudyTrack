@@ -1,8 +1,9 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, powerMonitor, screen } = require('electron')
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, powerMonitor, screen, Notification, dialog } = require('electron')
 const path = require('path')
 const fs   = require('fs')
 const crypto = require('crypto')
 const { exec, execFile } = require('child_process')
+const { autoUpdater } = require('electron-updater')
 
 const DATA_PATH = path.join(app.getPath('userData'), 'data.json')
 
@@ -68,7 +69,6 @@ function addOrMergeSession(domain, seconds, manual) {
 
 // ── Windows ───────────────────────────────────────────────────
 let mainWin = null, stickyWin = null, tray = null
-let stickyVisible = false   // runtime visibility — independent of the persisted "showSticky" setting
 
 function send(win, channel, data) {
   try { if (win && !win.isDestroyed()) win.webContents.send(channel, data) } catch {}
@@ -88,15 +88,14 @@ function createStickyWindow() {
   const x = appData.settings.stickyX ?? 40
   const y = appData.settings.stickyY ?? 40
   stickyWin = new BrowserWindow({
-    width: 200, height: 230, x, y,
+    width: 200, height: 258, x, y,
     frame: false, transparent: true, alwaysOnTop: true,
     resizable: false, skipTaskbar: true, hasShadow: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }
   })
   stickyWin.loadFile(path.join(__dirname, '../renderer/sticky.html'))
   stickyWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false })
-  stickyVisible = true
-  stickyWin.on('closed', () => { stickyWin = null; stickyVisible = false; rebuildTrayMenu() })
+  stickyWin.on('closed', () => { stickyWin = null; rebuildTrayMenu() })
 }
 
 function createTray() {
@@ -109,33 +108,24 @@ function rebuildTrayMenu() {
   if (!tray) return
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Open StudyTrack', click: () => { if (mainWin) mainWin.show(); else createMainWindow() } },
-    { label: stickyVisible ? 'Hide widget' : 'Show widget', click: () => stickyVisible ? hideSticky() : showSticky() },
+    { label: stickyWin ? 'Hide widget' : 'Show widget', click: () => setStickyEnabled(!stickyWin) },
     { type: 'separator' },
     { label: 'Quit', click: () => app.quit() }
   ]))
 }
 
-// Quick runtime show/hide — does NOT touch the persisted "showSticky" setting.
-// This is what the widget's ✕ button and the tray menu use, so closing it is
-// always temporary: it reopens automatically on the next app launch.
-function showSticky() {
-  if (!stickyWin) createStickyWindow()
-  else { stickyWin.show(); stickyVisible = true }
-  rebuildTrayMenu()
-}
-function hideSticky() {
-  if (stickyWin) stickyWin.hide()
-  stickyVisible = false
-  rebuildTrayMenu()
-}
-
-// Persisted enable/disable — used by the Settings toggle. Disabling here
-// means the widget won't be created at all on the next app launch.
+// Single source of truth for the floating widget: the Settings toggle, the
+// titlebar pin button, the widget's own ✕, and the tray menu item all call
+// this — so toggling it from any one of them keeps the rest in sync (they
+// used to be two disconnected states: a persisted setting and a runtime-only
+// show/hide, which could disagree about whether the widget was "on").
 function setStickyEnabled(enabled) {
   appData.settings.showSticky = enabled
   saveData(appData)
-  if (enabled) showSticky()
-  else { if (stickyWin) { stickyWin.destroy(); stickyWin = null }; stickyVisible = false; rebuildTrayMenu() }
+  if (enabled) { if (!stickyWin) createStickyWindow(); else stickyWin.show() }
+  else if (stickyWin) { stickyWin.destroy(); stickyWin = null }
+  rebuildTrayMenu()
+  send(mainWin, 'settings-updated', appData.settings)
 }
 
 // ── Native window-info helper ──────────────────────────────────
@@ -153,16 +143,22 @@ const WINHELPER_CS = `
 using System;
 using System.Text;
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 
 class WinHelper {
   [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
 
   static void Main(string[] args) {
     IntPtr h = GetForegroundWindow();
     StringBuilder sb = new StringBuilder(512);
     GetWindowText(h, sb, 512);
-    Console.WriteLine(sb.ToString());
+    uint pid = 0;
+    GetWindowThreadProcessId(h, out pid);
+    string proc = "";
+    try { proc = Process.GetProcessById((int)pid).ProcessName; } catch {}
+    Console.WriteLine(proc + "" + sb.ToString());
   }
 }
 `.trim()
@@ -189,21 +185,36 @@ function findCsc() {
 // be compiled), getActiveWindowTitle/getOpenBrowserTitles fall back to PowerShell.
 // A "failed" marker is cached so a machine without csc.exe doesn't retry (and
 // wait out the same failure) on every single app launch.
+// Hash of the current WINHELPER_CS source, stored alongside the compiled
+// .exe — lets us tell a stale cached binary (compiled from an older version
+// of this source, e.g. before it learned to also emit the process name)
+// apart from an up-to-date one. Without this, editing WINHELPER_CS here
+// would silently keep using the old cached .exe forever, since the original
+// cache check only asked "does a file exist at this path", not "does it
+// match what we'd compile today" — that's what broke website auto-track
+// after the app-tracking feature added a proc/title separator to the output.
+const WINHELPER_HASH = crypto.createHash('md5').update(WINHELPER_CS).digest('hex')
+
 function compileWinHelperAsync() {
   if (process.platform !== 'win32') return
   const dir       = app.getPath('temp')
   const csPath    = path.join(dir, 'studytrack_winhelper.cs')
   const exePath   = path.join(dir, 'studytrack_winhelper.exe')
+  const hashPath  = path.join(dir, 'studytrack_winhelper.hash')
   const failFlag  = path.join(dir, 'studytrack_winhelper.failed')
-  if (fs.existsSync(exePath)) { winHelperExe = exePath; setTrackingMethod('native'); return }
+  const cacheIsCurrent = fs.existsSync(exePath) && fs.existsSync(hashPath) &&
+    fs.readFileSync(hashPath, 'utf8') === WINHELPER_HASH
+  if (cacheIsCurrent) { winHelperExe = exePath; setTrackingMethod('native'); return }
   if (fs.existsSync(failFlag)) { setTrackingMethod('powershell'); return }
   try {
     fs.writeFileSync(csPath, WINHELPER_CS, 'utf8')
     const csc = findCsc()
     if (!csc) { try { fs.writeFileSync(failFlag, 'csc.exe not found') } catch {}; setTrackingMethod('powershell'); return }
     exec(`"${csc}" /nologo /target:exe /out:"${exePath}" "${csPath}"`, { windowsHide: true, timeout: 15000 }, (err) => {
-      if (!err && fs.existsSync(exePath)) { winHelperExe = exePath; setTrackingMethod('native') }
-      else { try { fs.writeFileSync(failFlag, String(err)) } catch {}; setTrackingMethod('powershell') }
+      if (!err && fs.existsSync(exePath)) {
+        try { fs.writeFileSync(hashPath, WINHELPER_HASH) } catch {}
+        winHelperExe = exePath; setTrackingMethod('native')
+      } else { try { fs.writeFileSync(failFlag, String(err)) } catch {}; setTrackingMethod('powershell') }
     })
   } catch { setTrackingMethod('powershell') }
 }
@@ -217,12 +228,17 @@ using System.Text;
 public class ForeWin {
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
 }
 "@
 $h = [ForeWin]::GetForegroundWindow()
 $sb = New-Object System.Text.StringBuilder 512
 [ForeWin]::GetWindowText($h, $sb, 512) | Out-Null
-$sb.ToString()
+$procId = 0
+[ForeWin]::GetWindowThreadProcessId($h, [ref]$procId) | Out-Null
+$proc = ''
+try { $proc = (Get-Process -Id $procId -ErrorAction Stop).ProcessName } catch {}
+"$proc$([char]1)$($sb.ToString())"
 `.trim()
 
 let psTempFile = null
@@ -233,15 +249,23 @@ function getPsFile() {
   return psTempFile
 }
 
-function getActiveWindowTitle(callback) {
-  if (process.platform !== 'win32') return callback('StudyTrack (non-Windows demo)')
+// Returns { proc, title } for the foreground window — proc is the raw exe
+// process name (no ".exe"), used to match native-app tracked items by
+// identity instead of by window title text (titles change, exe names don't).
+function parseProcTitle(raw) {
+  const [proc, ...rest] = raw.split('\x01')
+  return { proc: (proc || '').trim(), title: rest.join('\x01').trim() }
+}
+
+function getActiveWindowInfo(callback) {
+  if (process.platform !== 'win32') return callback({ proc: '', title: 'StudyTrack (non-Windows demo)' })
   if (winHelperExe) {
-    return execFile(winHelperExe, ['title'], { timeout: 800, windowsHide: true }, (err, stdout) => callback(err ? '' : stdout.toString().trim()))
+    return execFile(winHelperExe, ['title'], { timeout: 800, windowsHide: true }, (err, stdout) => callback(err ? { proc: '', title: '' } : parseProcTitle(stdout.toString())))
   }
   exec(
     `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${getPsFile()}"`,
     { timeout: 1200, windowsHide: true },
-    (err, stdout) => callback(err ? '' : stdout.toString().trim())
+    (err, stdout) => callback(err ? { proc: '', title: '' } : parseProcTitle(stdout.toString()))
   )
 }
 
@@ -362,6 +386,75 @@ function getOpenBrowserTitles(callback) {
   )
 }
 
+// Lists currently running apps that have a visible top-level window — lets
+// the "Add app to track" picker show real running apps (e.g. Claude desktop)
+// instead of making the user type an exe name from Task Manager.
+const PS_SCRIPT_APPS = `
+Add-Type @"
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+using System.Collections.Generic;
+public class WinEnum2 {
+  public delegate bool EnumProc(IntPtr hWnd, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder s, int n);
+  [DllImport("user32.dll")] public static extern int GetWindowTextLength(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+}
+"@
+$SEP = [char]1
+$excludeProcs = @('electron','studytrack','explorer','shellexperiencehost','searchhost','startmenuexperiencehost','textinputhost','applicationframehost','systemsettings')
+$results = New-Object System.Collections.Generic.List[string]
+$cb = {
+  param($hWnd, $lParam)
+  if ([WinEnum2]::IsWindowVisible($hWnd) -and [WinEnum2]::GetWindowTextLength($hWnd) -gt 0) {
+    $procId = 0
+    [WinEnum2]::GetWindowThreadProcessId($hWnd, [ref]$procId) | Out-Null
+    $proc = ''
+    try { $proc = (Get-Process -Id $procId -ErrorAction Stop).ProcessName } catch {}
+    if ($proc -and ($excludeProcs -notcontains $proc.ToLower())) {
+      $sb = New-Object System.Text.StringBuilder 512
+      [WinEnum2]::GetWindowText($hWnd, $sb, 512) | Out-Null
+      $title = $sb.ToString().Trim()
+      if ($title.Length -gt 0) { $results.Add("$proc$SEP$title") }
+    }
+  }
+  return $true
+}
+[WinEnum2]::EnumWindows($cb, [IntPtr]::Zero) | Out-Null
+$results -join "\`n"
+`.trim()
+
+let psAppsTempFile = null
+function getPsAppsFile() {
+  if (psAppsTempFile && fs.existsSync(psAppsTempFile)) return psAppsTempFile
+  psAppsTempFile = path.join(app.getPath('temp'), 'studytrack_apps.ps1')
+  fs.writeFileSync(psAppsTempFile, PS_SCRIPT_APPS, 'utf8')
+  return psAppsTempFile
+}
+
+function parseAppList(raw) {
+  const byProc = new Map()
+  raw.split('\n').map(l => l.trim()).filter(Boolean).forEach(line => {
+    const [proc, title] = line.split('\x01')
+    if (!proc || !title) return
+    const existing = byProc.get(proc)
+    if (!existing || title.trim().length > existing.length) byProc.set(proc, title.trim())
+  })
+  return [...byProc.entries()].map(([proc, title]) => ({ proc, title }))
+}
+
+function getRunningApps(callback) {
+  if (process.platform !== 'win32') return callback([])
+  exec(
+    `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${getPsAppsFile()}"`,
+    { timeout: 4000, windowsHide: true },
+    (err, stdout) => callback(err ? [] : parseAppList(stdout.toString()))
+  )
+}
+
 // ── Tracking state (all in main process) ─────────────────────
 let autoCurrentDomain = null   // domain being tracked right now
 let autoAccumSecs     = 0      // seconds for current session (not yet flushed)
@@ -395,20 +488,40 @@ function tick() {
   }
 
   tickBusy = true
-  getActiveWindowTitle(title => {
+  getActiveWindowInfo(info => {
     tickBusy = false
-    onTitleResolved(title)
+    onTitleResolved(info)
   })
 }
 
-// Shared by auto-track matching and by the open-tabs list (to exclude sites already auto-tracked)
-function matchSite(title) {
+// Website-kind entries match by keyword-in-title; shared by matchSite (the
+// 1s auto-track hot path) and matchSiteByTitle (the manual-timer tab list).
+function matchesByTitle(site, titleLo) {
+  const kw = site.domain.replace(/^www\./, '').split('.')[0].toLowerCase()
+  return titleLo.includes(kw) || titleLo.includes(site.domain.toLowerCase())
+}
+
+// Matches the foreground window against tracked items. Website-kind entries
+// match by keyword-in-title; app-kind entries match by exe process name
+// instead, since a native app's title text varies per document/view (e.g.
+// Claude's window title changes per conversation) but its process name doesn't.
+function matchSite(info) {
   const sites   = appData.sites || []
-  const titleLo = title.toLowerCase()
+  const titleLo = (info.title || '').toLowerCase()
+  const procLo  = (info.proc  || '').toLowerCase()
   return sites.find(s => {
-    const kw = s.domain.replace(/^www\./, '').split('.')[0].toLowerCase()
-    return titleLo.includes(kw) || titleLo.includes(s.domain.toLowerCase())
+    if (s.kind === 'app') return s.process && procLo === s.process.toLowerCase()
+    return matchesByTitle(s, titleLo)
   })
+}
+
+// Title-only variant for the manual-timer's open-tabs list, which only ever
+// deals with browser tabs (no process info available per-tab) — only checks
+// website-kind entries since app-kind ones can't be matched from a tab title.
+function matchSiteByTitle(title) {
+  const sites   = (appData.sites || []).filter(s => s.kind !== 'app')
+  const titleLo = (title || '').toLowerCase()
+  return sites.find(s => matchesByTitle(s, titleLo))
 }
 
 // Tolerates brief "not matched" reads (PowerShell polling lag, momentary alt-tab,
@@ -416,10 +529,10 @@ function matchSite(title) {
 // otherwise a single flaky tick reset the whole session timer back to 0.
 let awayTicks       = 0
 let lastMatchedName = null
-let lastMatchedColor= null
 const GRACE_TICKS = 3   // seconds of "no match" tolerated before treating the site as left
 
-function onTitleResolved(title) {
+function onTitleResolved(info) {
+  const title = info.title
   send(mainWin, 'active-window', title)   // debug panel
 
   if (!appData.settings.autoTrack) {
@@ -427,20 +540,19 @@ function onTitleResolved(title) {
     return
   }
 
-  // ── match against tracked sites ──
-  const matched = matchSite(title)
+  // ── match against tracked sites/apps ──
+  const matched = matchSite(info)
 
   if (matched) {
     awayTicks        = 0
     lastMatchedName  = matched.name
-    lastMatchedColor = matched.color
   } else if (autoCurrentDomain) {
     awayTicks++
   }
 
   // Still within grace period? keep counting the previous site instead of resetting.
   const effective = matched || (autoCurrentDomain && awayTicks < GRACE_TICKS
-    ? { domain: autoCurrentDomain, name: lastMatchedName, color: lastMatchedColor }
+    ? { domain: autoCurrentDomain, name: lastMatchedName }
     : null)
 
   if (effective) {
@@ -457,7 +569,6 @@ function onTitleResolved(title) {
     const payload = {
       domain:        effective.domain,
       siteName:      effective.name,
-      siteColor:     effective.color,
       accumSecs:     autoAccumSecs,   // current session seconds (keeps counting across periodic flushes) — for the dashboard's session clock
       liveUnflushed: todayLiveExtra,  // seconds NOT yet on disk — this is what the widget should add on top of its saved total
       todaySecs,                      // total today (saved + live)
@@ -524,6 +635,59 @@ function streakDays() {
   return streak
 }
 
+// ── Auto-update ───────────────────────────────────────────────
+// Checks GitHub Releases (configured under "build.publish" in package.json)
+// for a newer published version, downloads it silently in the background,
+// then asks the user to restart — never interrupts an active session by
+// restarting on its own. No-op when running unpackaged (npm start), since
+// electron-updater requires a real installed/signed app to apply updates to.
+function initAutoUpdater() {
+  if (!app.isPackaged) return
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = false
+
+  autoUpdater.on('update-downloaded', () => {
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'StudyTrack',
+      message: 'Đã có bản cập nhật mới',
+      detail: 'Bản cập nhật đã tải xong. Khởi động lại StudyTrack để cài đặt?',
+      buttons: ['Khởi động lại ngay', 'Để sau'],
+      defaultId: 0,
+      cancelId: 1,
+    }).then(({ response }) => {
+      if (response === 0) autoUpdater.quitAndInstall()
+    })
+  })
+
+  autoUpdater.checkForUpdates().catch(() => {})   // silent — no internet / no releases yet is fine
+}
+
+// ── Daily reminder ────────────────────────────────────────────
+// Tracked separately from data.json (not persisted) — a missed/duplicate
+// reminder across a restart is harmless, so it's not worth the disk write.
+let lastReminderDate = null
+
+function checkDailyReminder() {
+  if (!appData.settings.notifications) return
+  const reminderHour = appData.settings.reminderHour ?? 20
+  if (new Date().getHours() < reminderHour) return   // not at the user's reminder hour yet
+  const today = todayStr()
+  if (lastReminderDate === today) return   // already reminded today
+  const totalSecs = todaySeconds() + todayLiveExtra
+  const goalSecs   = (appData.settings.goalHours || 3) * 3600
+  if (totalSecs >= goalSecs) return        // goal already met
+  lastReminderDate = today
+  if (!Notification.isSupported()) return
+  const remainingMin = Math.max(1, Math.round((goalSecs - totalSecs) / 60))
+  const n = new Notification({
+    title: 'StudyTrack — chưa đạt mục tiêu hôm nay',
+    body: `Còn thiếu khoảng ${remainingMin} phút để đạt mục tiêu ${appData.settings.goalHours || 3}h hôm nay.`,
+  })
+  n.on('click', () => { if (mainWin) { mainWin.show(); mainWin.focus() } else createMainWindow() })
+  n.show()
+}
+
 // ── IPC ───────────────────────────────────────────────────────
 ipcMain.handle('get-data', () => ({
   ...appData,
@@ -537,7 +701,15 @@ ipcMain.handle('save-settings', (_, s) => {
   appData.settings = s; saveData(appData); rebuildTrayMenu()
   if (!!s.showSticky !== !!stickyWasEnabled) setStickyEnabled(!!s.showSticky)
   send(stickyWin, 'settings-updated', s)
-  app.setLoginItemSettings({ openAtLogin: !!s.startOnBoot })
+  // Unpackaged (npm start / electron .), process.execPath is the generic
+  // electron.exe — without passing this app's path as an arg, Windows would
+  // launch a blank Electron shell on login instead of StudyTrack. Packaged
+  // builds don't need this since execPath already points at StudyTrack.exe.
+  app.setLoginItemSettings({
+    openAtLogin: !!s.startOnBoot,
+    path: process.execPath,
+    args: app.isPackaged ? [] : [app.getAppPath()],
+  })
   if (!s.autoTrack) flushAutoSession('settings-off')
   return true
 })
@@ -546,20 +718,38 @@ ipcMain.handle('save-settings', (_, s) => {
 // candidates for the manual timer's dropdown.
 ipcMain.handle('get-open-tabs', () => new Promise(resolve => {
   getOpenBrowserTitles(tabs => resolve(
-    tabs.filter(t => !matchSite(t.title) && !(t.url && matchSite(t.url)))
+    tabs.filter(t => !matchSiteByTitle(t.title) && !(t.url && matchSiteByTitle(t.url)))
         .map(t => ({ title: t.title, url: t.url, domain: t.url ? normalizeDomain(t.url) : '' }))
   ))
 }))
 
+// Running apps with a visible window — candidates for the "Add app to track"
+// picker, excluding ones already tracked (so re-adding shows as unavailable).
+ipcMain.handle('get-running-apps', () => new Promise(resolve => {
+  getRunningApps(apps => resolve(
+    apps.filter(a => !appData.sites.some(s => s.kind === 'app' && s.process?.toLowerCase() === a.proc.toLowerCase()))
+  ))
+}))
+
+// App-kind entries are keyed by domain = "app:<process>" so every existing
+// session/breakdown/sync code path (all keyed on the generic `domain` string)
+// works unchanged — no separate storage needed for native-app tracking.
+function normalizeSiteEntry(site) {
+  if (site.kind === 'app') {
+    return { name: site.name, kind: 'app', process: site.process, domain: `app:${site.process.toLowerCase()}`, color: site.color }
+  }
+  return { ...site, domain: normalizeDomain(site.domain) }
+}
+
 ipcMain.handle('add-site', (_, site) => {
-  appData.sites.push({ ...site, domain: normalizeDomain(site.domain) })
+  appData.sites.push(normalizeSiteEntry(site))
   saveData(appData)
   return appData.sites
 })
 ipcMain.handle('remove-site', (_, domain) => { appData.sites = appData.sites.filter(s => s.domain !== domain); saveData(appData); return appData.sites })
 ipcMain.handle('update-site', (_, { domain, site }) => {
   const idx = appData.sites.findIndex(s => s.domain === domain)
-  if (idx !== -1) appData.sites[idx] = { ...site, domain: normalizeDomain(site.domain) }
+  if (idx !== -1) appData.sites[idx] = normalizeSiteEntry(site)
   saveData(appData)
   return appData.sites
 })
@@ -601,10 +791,12 @@ ipcMain.handle('log-session', (_, session) => {
 ipcMain.on('window-minimize', () => mainWin?.minimize())
 ipcMain.on('window-maximize', () => mainWin?.isMaximized() ? mainWin.unmaximize() : mainWin?.maximize())
 ipcMain.on('window-close',    () => mainWin?.hide())
-ipcMain.on('toggle-sticky',   () => stickyVisible ? hideSticky() : showSticky())
+ipcMain.on('toggle-sticky',   () => setStickyEnabled(!stickyWin))
 ipcMain.on('open-main',       () => { if (mainWin) mainWin.show(); else createMainWindow() })
-ipcMain.on('close-sticky',    () => hideSticky())   // ✕ button — temporary hide, reopens on next launch
-ipcMain.on('show-sticky-now', () => showSticky())   // manual "Show widget" button — always works regardless of saved state
+// ✕ on the widget just flips the same persisted setting the Settings toggle
+// and the titlebar pin button (toggle-sticky) use — see setStickyEnabled for
+// why that replaced the old separate runtime-only show/hide.
+ipcMain.on('close-sticky',    () => setStickyEnabled(false))
 // ── Manual drag for sticky widget ──────────────────────────────
 // Native -webkit-app-region:drag freezes the transparent/blurred widget's
 // content mid-move on Windows (OS move loop blocks Chromium repaint until
@@ -640,6 +832,9 @@ app.whenReady().then(() => {
   if (appData.settings.showSticky) createStickyWindow()
   createTray()
   startTracking()
+  checkDailyReminder()
+  setInterval(checkDailyReminder, 60_000)
+  initAutoUpdater()
 })
 app.on('window-all-closed', () => {})
 app.on('activate',          () => { if (!mainWin) createMainWindow() })

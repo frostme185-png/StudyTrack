@@ -27,6 +27,7 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
 .tab-bar{display:flex;gap:2px;-webkit-app-region:no-drag}
 .tab{font-size:12px;padding:5px 14px;border-radius:6px;border:none;background:transparent;cursor:pointer;color:var(--text2)}
 .tab:hover{background:var(--bg3)}.tab.active{background:var(--bg);color:var(--text);font-weight:500;border:1px solid var(--border2)}
+.tab.pin-on{background:rgba(29,158,117,.15);color:var(--accent)}
 
 /* Layout */
 .content{flex:1;overflow:hidden}
@@ -96,17 +97,26 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
 .sd-bar{height:100%;border-radius:99px}
 .sd-time{font-size:10px;color:var(--text3);width:40px;text-align:right}
 
+/* Insights */
+.insights-box{display:flex;flex-direction:column;gap:8px;margin-bottom:4px}
+.insight-row{display:flex;align-items:flex-start;gap:8px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-size:12px;color:var(--text2);line-height:1.4}
+.insight-row .ic{flex-shrink:0;font-size:13px}
+.trend-up{color:#1D9E75;font-weight:600}
+.trend-down{color:#E24B4A;font-weight:600}
+
 /* Websites tab */
-.add-row{display:flex;gap:8px;margin-bottom:14px}
+.add-row{display:flex;gap:8px;margin-bottom:14px;align-items:center}
 .add-row input{flex:1;font-size:13px;padding:7px 11px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg2);color:var(--text);outline:none}
 .add-row input:focus{border-color:var(--accent)}
+.add-row input.color-pick{flex:none;width:26px;height:26px;padding:0;border:none;border-radius:50%;cursor:pointer;background:none;-webkit-appearance:none}
+.color-pick::-webkit-color-swatch-wrapper{padding:0;border-radius:50%}
+.color-pick::-webkit-color-swatch{border:1px solid var(--border2);border-radius:50%}
 .btn{padding:7px 16px;border-radius:var(--radius);border:1px solid var(--border2);background:transparent;font-size:12px;cursor:pointer;color:var(--text)}
 .btn:hover{background:var(--bg2)}
 .site-cards{display:flex;flex-direction:column;gap:8px}
 .site-card{display:flex;align-items:center;gap:10px;background:var(--bg2);border-radius:var(--radius);padding:11px 14px;border:1px solid var(--border)}
 .sc-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 .sc-info{flex:1}.sc-name{font-size:13px;font-weight:500}.sc-dom{font-size:10px;color:var(--text3);margin-top:1px}
-.live-badge{font-size:9px;padding:1px 6px;border-radius:99px;background:var(--accent);color:#fff;margin-left:6px;vertical-align:middle}
 .sc-time{font-size:11px;color:var(--text2)}
 .del-btn{border:none;background:transparent;cursor:pointer;color:var(--text3);font-size:15px;padding:3px 6px;border-radius:4px}
 .del-btn:hover{background:var(--bg3);color:var(--red)}
@@ -127,6 +137,10 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
 .swatches{display:flex;gap:7px}
 .swatch{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid transparent}
 .swatch.sel{border-color:var(--text)}
+.theme-pills{display:flex;gap:6px}
+.theme-pill{font-size:10px;padding:5px 9px;border-radius:99px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer}
+.theme-pill:hover{background:var(--bg3)}
+.theme-pill.sel{background:var(--accent);color:#fff;border-color:var(--accent)}
 
 /* Debug panel */
 .debug-panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
@@ -161,7 +175,7 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
     <button class="tab" onclick="gotoView('cfg',this)">Settings</button>
     <button class="tab" onclick="gotoView('account',this)">Account</button>
   </div>
-  <button class="tab" style="-webkit-app-region:no-drag;margin-left:8px" onclick="window.api.showStickyNow()" title="Re-open the floating widget">📌 Widget</button>
+  <button class="tab" id="pinWidgetBtn" style="-webkit-app-region:no-drag;margin-left:8px" onclick="window.api.toggleSticky()" title="Show/hide the floating widget">📌 Widget</button>
 </div>
 
 <div class="content">
@@ -182,7 +196,7 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
       <div class="stat-box">
         <div class="stat-lbl">📅 This Week</div>
         <div class="stat-val" id="s-week">–</div>
-        <div class="stat-sub">last 7 days</div>
+        <div class="stat-sub">last 7 days <span id="s-week-trend"></span></div>
       </div>
       <div class="stat-box">
         <div class="stat-lbl">🏆 Best Day</div>
@@ -199,18 +213,6 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
         <div class="at-detail" id="at-detail">Open a tracked website to start</div>
       </div>
       <div class="at-time" id="at-time"></div>
-    </div>
-
-    <!-- Manual timer -->
-    <div class="timer-card">
-      <div class="timer-info">
-        <div class="timer-dig" id="timer-dig">00:00:00</div>
-        <div class="timer-lbl" id="timer-lbl">Manual timer — select a site and press Start</div>
-      </div>
-      <div class="timer-btns">
-        <select id="timer-site-sel" class="t-sel"></select>
-        <button class="t-btn" id="timer-toggle-btn" onclick="toggleManualTimer()">▶ Start</button>
-      </div>
     </div>
 
     <div class="sec-hd">Study History · 6 months</div>
@@ -238,14 +240,35 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
 
     <div class="sec-hd">Website Breakdown · This Month</div>
     <div class="site-dist" id="siteDist"></div>
+
+    <div class="sec-hd">Insights</div>
+    <div class="insights-box" id="insightsBox"></div>
   </div>
 
   <!-- WEBSITES -->
   <div class="view" id="view-sites">
+    <!-- Manual timer — for one-off sites/tabs you don't want to add to the tracked list below -->
+    <div class="timer-card">
+      <div class="timer-info">
+        <div class="timer-dig" id="timer-dig">00:00:00</div>
+        <div class="timer-lbl" id="timer-lbl">Manual timer — select a site and press Start</div>
+      </div>
+      <div class="timer-btns">
+        <select id="timer-site-sel" class="t-sel"></select>
+        <button class="t-btn" id="timer-toggle-btn" onclick="toggleManualTimer()">▶ Start</button>
+      </div>
+    </div>
+
+    <div class="sec-hd">Tracked Websites & Apps</div>
+    <div class="theme-pills" id="kindToggle" style="margin-bottom:10px">
+      <button class="theme-pill sel" data-kind="site" onclick="setAddKind('site')">🌐 Website</button>
+      <button class="theme-pill" data-kind="app" onclick="setAddKind('app')">🖥️ App</button>
+    </div>
     <div class="add-row">
+      <input id="siteColorIn" type="color" class="color-pick" value="#378ADD" title="Color"/>
       <input id="siteNameIn" placeholder="Display name, e.g. Udemy" style="max-width:160px"/>
       <input id="siteDomIn" placeholder="Domain, e.g. udemy.com"/>
-      <input id="siteColorIn" type="color" value="#378ADD" style="width:40px;height:36px;padding:2px;border-radius:6px;border:1px solid var(--border2);cursor:pointer;background:transparent"/>
+      <select id="appPickerSel" class="t-sel" style="display:none;flex:1" onchange="onAppPicked(this)"></select>
       <button class="btn" id="siteSubmitBtn" onclick="addSite()">+ Add</button>
       <button class="btn" id="siteCancelBtn" onclick="cancelSiteEdit()" style="display:none">Cancel</button>
     </div>
@@ -330,6 +353,15 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
           <div class="swatch" style="background:#7F77DD" onclick="setColor('purple','#CECBF6','#AFA9EC','#7F77DD','#534AB7',this)"></div>
         </div>
       </div>
+      <div class="s-row">
+        <div><div class="s-lbl">Widget theme</div><div class="s-sub">Look of the floating widget</div></div>
+        <div class="theme-pills" id="themePills">
+          <button class="theme-pill" data-theme="minimal" onclick="setWidgetTheme('minimal')">Minimal</button>
+          <button class="theme-pill" data-theme="gradient" onclick="setWidgetTheme('gradient')">Gradient</button>
+          <button class="theme-pill" data-theme="glass" onclick="setWidgetTheme('glass')">Glass</button>
+          <button class="theme-pill" data-theme="neon" onclick="setWidgetTheme('neon')">Neon</button>
+        </div>
+      </div>
     </div>
     <div class="s-group">
       <div class="s-group-title">Auto-Tracking</div>
@@ -353,8 +385,11 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
         </div>
       </div>
       <div class="s-row">
-        <div><div class="s-lbl">Daily reminder</div><div class="s-sub">Notify if goal not reached by 8 PM</div></div>
-        <button class="tog on" id="tog-notif" onclick="toggleSetting('notifications',this)"><div class="tog-th"></div></button>
+        <div><div class="s-lbl">Daily reminder</div><div class="s-sub" id="reminder-sub">Notify if goal not reached by 8 PM</div></div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <select id="reminder-hour-sel" class="t-sel" style="flex:none;min-width:0" onchange="setReminderHour(this.value)"></select>
+          <button class="tog on" id="tog-notif" onclick="toggleSetting('notifications',this)"><div class="tog-th"></div></button>
+        </div>
       </div>
       <div class="s-row">
         <div><div class="s-lbl">Launch at startup</div></div>
@@ -417,6 +452,7 @@ async function init() {
   buildStreak(appData.sessions || [])
   buildBarChart(appData.sessions || [])
   buildSiteDist(appData.sites || [], appData.sessions || [])
+  buildInsights(appData.sessions || [])
   refreshTimerSiteSelect()
   setInterval(refreshTimerSiteSelect, 10000)
   document.getElementById('timer-site-sel').addEventListener('focus', refreshTimerSiteSelect)
@@ -456,7 +492,7 @@ async function init() {
     dbgLog('save', `Session saved — today: ${secsToHM(td)}`)
   })
 
-  window.api.on('settings-updated', s => { settings = s; goalH = s.goalHours || 3 })
+  window.api.on('settings-updated', s => { settings = s; goalH = s.goalHours || 3; applySettings() })
 }
 
 // ── Auto-track UI ─────────────────────────────────────────────
@@ -518,8 +554,7 @@ function gotoView(id, el) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'))
   document.getElementById('view-'+id).classList.add('active')
   if (el) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); el.classList.add('active') }
-  if (id === 'sites') renderSiteCards(appData.sites||[], appData.sessions||[])
-  if (id === 'dash') refreshTimerSiteSelect()
+  if (id === 'sites') { renderSiteCards(appData.sites||[], appData.sessions||[]); refreshTimerSiteSelect() }
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -687,6 +722,84 @@ function buildSiteDist(sites,sessions) {
   if(!rows.length) el.innerHTML='<span style="font-size:12px;color:var(--text3)">No websites added yet.</span>'
 }
 
+// ── Insights ──────────────────────────────────────────────────
+// Self-serve analytics for personal use: trend vs last week, which weekday
+// you tend to study most, and which site dominates this month. All derived
+// from sessions[] already in memory — no extra tracking needed.
+function buildInsights(sessions) {
+  const box = document.getElementById('insightsBox')
+  const trendEl = document.getElementById('s-week-trend')
+  if (!box) return
+  if (!sessions.length) {
+    box.innerHTML = '<span style="font-size:12px;color:var(--text3)">Chưa có đủ dữ liệu để phân tích.</span>'
+    if (trendEl) trendEl.innerHTML = ''
+    return
+  }
+
+  const byDate = {}
+  sessions.forEach(s => { byDate[s.date] = (byDate[s.date]||0) + s.seconds })
+
+  const today = new Date()
+  function sumDaysRange(endOffset, n) {
+    let sum = 0
+    for (let i = 0; i < n; i++) {
+      const d = new Date(today); d.setDate(today.getDate() - endOffset - i)
+      sum += byDate[dateStr(d)] || 0
+    }
+    return sum
+  }
+  const last7 = sumDaysRange(0, 7)
+  const prev7 = sumDaysRange(7, 7)
+  const pct = prev7 > 0 ? Math.round((last7 - prev7) / prev7 * 100) : null
+
+  if (trendEl) {
+    trendEl.innerHTML = pct === null
+      ? (last7 > 0 ? '<span class="trend-up">▲ mới</span>' : '')
+      : pct === 0 ? ''
+      : pct > 0 ? `<span class="trend-up">▲ ${pct}%</span>` : `<span class="trend-down">▼ ${Math.abs(pct)}%</span>`
+  }
+
+  const rows = []
+  if (pct !== null) {
+    if (pct > 0) rows.push({ ic:'📈', text:`Tuần này bạn học nhiều hơn tuần trước <b class="trend-up">${pct}%</b> (${secsToHM(last7)} so với ${secsToHM(prev7)}).` })
+    else if (pct < 0) rows.push({ ic:'📉', text:`Tuần này bạn học ít hơn tuần trước <b class="trend-down">${Math.abs(pct)}%</b> (${secsToHM(last7)} so với ${secsToHM(prev7)}).` })
+    else rows.push({ ic:'➖', text:`Tuần này bạn học bằng tuần trước (${secsToHM(last7)}).` })
+  } else if (last7 > 0) {
+    rows.push({ ic:'📈', text:`Bạn đã học ${secsToHM(last7)} trong 7 ngày qua.` })
+  }
+
+  // Best weekday — average per occurrence, not total (so a weekday that just
+  // happens to have more calendar occurrences in the data doesn't win unfairly).
+  const WD = ['Chủ Nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7']
+  const wdTotal = Array(7).fill(0), wdCount = Array(7).fill(0)
+  Object.entries(byDate).forEach(([ds, secs]) => {
+    const dow = new Date(ds).getDay()
+    wdTotal[dow] += secs; wdCount[dow]++
+  })
+  let bestWd = -1, bestAvg = 0
+  for (let i = 0; i < 7; i++) {
+    if (!wdCount[i]) continue
+    const avg = wdTotal[i] / wdCount[i]
+    if (avg > bestAvg) { bestAvg = avg; bestWd = i }
+  }
+  if (bestWd !== -1) rows.push({ ic:'🗓️', text:`Bạn thường học nhiều nhất vào <b>${WD[bestWd]}</b> (trung bình ${secsToHM(Math.round(bestAvg))}/lần).` })
+
+  // Top site this month
+  const thisMonth = monthStr(new Date())
+  const bySiteMonth = {}
+  sessions.filter(s => s.date.startsWith(thisMonth)).forEach(s => { bySiteMonth[s.domain] = (bySiteMonth[s.domain]||0) + s.seconds })
+  const monthEntries = Object.entries(bySiteMonth)
+  if (monthEntries.length) {
+    const totalMonth = monthEntries.reduce((a,[,v]) => a+v, 0)
+    const [topDomain, topSecs] = monthEntries.reduce((a,b) => b[1]>a[1]?b:a)
+    rows.push({ ic:'🌐', text:`<b>${escapeHtml(topDomain)}</b> chiếm <b>${Math.round(topSecs/totalMonth*100)}%</b> thời gian học tháng này (${secsToHM(topSecs)}).` })
+  }
+
+  box.innerHTML = rows.length
+    ? rows.map(r => `<div class="insight-row"><span class="ic">${r.ic}</span><span>${r.text}</span></div>`).join('')
+    : '<span style="font-size:12px;color:var(--text3)">Chưa có đủ dữ liệu để phân tích.</span>'
+}
+
 // ── Manual timer ──────────────────────────────────────────────
 // Dropdown lists currently-open browser tabs/windows that are NOT already
 // covered by an auto-tracked site (those track themselves automatically).
@@ -700,8 +813,8 @@ let currentOpenTabs = []   // index-matched to the dropdown's option values
 async function refreshTimerSiteSelect() {
   if (manualRunning) return   // don't disturb the dropdown mid-session
   // Walking the UI Automation tree isn't free — skip it while the user isn't
-  // even looking at the Dashboard (the only view with this control).
-  if (!document.getElementById('view-dash').classList.contains('active')) return
+  // even looking at the Websites tab (the only view with this control).
+  if (!document.getElementById('view-sites').classList.contains('active')) return
   const sel = document.getElementById('timer-site-sel')
   const prevVal = sel.options[sel.selectedIndex]?.dataset.title
   currentOpenTabs = await window.api.getOpenTabs()
@@ -770,11 +883,12 @@ function renderSiteCards(sites,sessions) {
   const el=document.getElementById('siteCards'); el.innerHTML=''
   sites.forEach(s=>{
     const secs=todayBySite[s.domain]||0
+    const isApp = s.kind === 'app'
     el.innerHTML+=`<div class="site-card">
       <div class="sc-dot" style="background:${s.color}"></div>
       <div class="sc-info">
-        <div class="sc-name">${escapeHtml(s.name)}</div>
-        <div class="sc-dom">${escapeHtml(s.domain)}</div>
+        <div class="sc-name">${isApp?'🖥️ ':''}${escapeHtml(s.name)}</div>
+        <div class="sc-dom">${escapeHtml(isApp ? s.process : s.domain)}</div>
       </div>
       <span class="sc-time">${secs>0?secsToHM(secs)+' today':'No sessions yet'}</span>
       <button class="del-btn" onclick="startEditSite('${s.domain}')" title="Edit">✎</button>
@@ -784,13 +898,47 @@ function renderSiteCards(sites,sessions) {
   if(!sites.length) el.innerHTML='<span style="font-size:12px;color:var(--text3)">No websites yet. Add one above!</span>'
 }
 
+let addKind = 'site'   // 'site' (website, matched by domain keyword) or 'app' (native app, matched by process name)
+
+function setAddKind(kind) {
+  addKind = kind
+  document.querySelectorAll('#kindToggle .theme-pill').forEach(b=>b.classList.toggle('sel', b.dataset.kind===kind))
+  document.getElementById('siteDomIn').style.display = kind==='site' ? '' : 'none'
+  document.getElementById('appPickerSel').style.display = kind==='app' ? '' : 'none'
+  if (kind === 'app') refreshAppPicker()
+}
+
+async function refreshAppPicker() {
+  const sel = document.getElementById('appPickerSel')
+  sel.innerHTML = '<option value="">-- Select a running app --</option>'
+  const apps = await window.api.getRunningApps()
+  apps.forEach(a => { sel.innerHTML += `<option value="${escapeHtml(a.proc)}" data-title="${escapeHtml(a.title)}">${escapeHtml(a.title)} (${escapeHtml(a.proc)})</option>` })
+}
+
+// Auto-fills the display name from the picked app's window title, but only
+// if the user hasn't already typed something — avoids clobbering an edit.
+function onAppPicked(sel) {
+  const opt = sel.options[sel.selectedIndex]
+  const nameIn = document.getElementById('siteNameIn')
+  if (opt && opt.value && !nameIn.value.trim()) nameIn.value = opt.dataset.title
+}
+
 function startEditSite(domain) {
   const site = (appData.sites||[]).find(s => s.domain === domain)
   if (!site) return
   editingDomain = domain
   document.getElementById('siteNameIn').value = site.name
-  document.getElementById('siteDomIn').value = site.domain
   document.getElementById('siteColorIn').value = site.color
+  if (site.kind === 'app') {
+    setAddKind('app')
+    // The app may not currently be running, so we can't rely on the live
+    // picker list containing it — seed a single option with its saved process.
+    document.getElementById('appPickerSel').innerHTML =
+      `<option value="${escapeHtml(site.process)}" selected>${escapeHtml(site.name)} (${escapeHtml(site.process)})</option>`
+  } else {
+    setAddKind('site')
+    document.getElementById('siteDomIn').value = site.domain
+  }
   document.getElementById('siteSubmitBtn').textContent = '💾 Save'
   document.getElementById('siteCancelBtn').style.display = ''
 }
@@ -801,16 +949,25 @@ function cancelSiteEdit() {
   document.getElementById('siteDomIn').value = ''
   document.getElementById('siteSubmitBtn').textContent = '+ Add'
   document.getElementById('siteCancelBtn').style.display = 'none'
+  setAddKind('site')
 }
 
 async function addSite() {
   const name=document.getElementById('siteNameIn').value.trim()
-  const domain=document.getElementById('siteDomIn').value.trim()
   const color=document.getElementById('siteColorIn').value
-  if(!name||!domain) return
+  let payload
+  if (addKind === 'app') {
+    const process = document.getElementById('appPickerSel').value
+    if (!name || !process) return
+    payload = { name, kind:'app', process, color }
+  } else {
+    const domain=document.getElementById('siteDomIn').value.trim()
+    if(!name||!domain) return
+    payload = { name, domain, color }
+  }
   const sites = editingDomain
-    ? await window.api.updateSite(editingDomain, {name,domain,color})
-    : await window.api.addSite({name,domain,color})
+    ? await window.api.updateSite(editingDomain, payload)
+    : await window.api.addSite(payload)
   appData.sites=sites
   cancelSiteEdit()
   renderSiteCards(sites,appData.sessions||[])
@@ -828,23 +985,44 @@ async function removeSite(domain) {
 }
 
 // ── Settings ──────────────────────────────────────────────────
+function hourLabel(h) { const ap=h<12?'AM':'PM', h12=h%12===0?12:h%12; return `${h12}:00 ${ap}` }
+
+function buildReminderHourSelect() {
+  const sel = document.getElementById('reminder-hour-sel')
+  sel.innerHTML = ''
+  for (let h=0; h<24; h++) sel.innerHTML += `<option value="${h}">${hourLabel(h)}</option>`
+  sel.value = settings.reminderHour ?? 20
+  document.getElementById('reminder-sub').textContent = `Notify if goal not reached by ${hourLabel(sel.value)}`
+}
+
+function setReminderHour(h) {
+  settings.reminderHour = Number(h)
+  document.getElementById('reminder-sub').textContent = `Notify if goal not reached by ${hourLabel(h)}`
+  settings.goalHours=goalH
+  window.api.saveSettings(settings)
+}
+
 function applySettings() {
   document.getElementById('goalVal').textContent=goalH+'h'
   syncToggle('tog-sticky',settings.showSticky!==false)
+  document.getElementById('pinWidgetBtn').classList.toggle('pin-on', settings.showSticky!==false)
   syncToggle('tog-auto',settings.autoTrack!==false)
   syncToggle('tog-idle',settings.idlePause!==false)
   syncToggle('tog-notif',settings.notifications!==false)
   syncToggle('tog-boot',!!settings.startOnBoot)
+  buildReminderHourSelect()
   if(settings.streakColor){
     const m={green:['#9FE1CB','#5DCAA5','#1D9E75','#0F6E56'],blue:['#B5D4F4','#85B7EB','#378ADD','#185FA5'],pink:['#F4C0D1','#ED93B1','#D4537E','#993556'],purple:['#CECBF6','#AFA9EC','#7F77DD','#534AB7']}
     const c=m[settings.streakColor]; if(c) applyStreakColors(...c)
   }
+  document.querySelectorAll('.theme-pill').forEach(p=>p.classList.toggle('sel', p.dataset.theme === (settings.widgetTheme||'minimal')))
 }
 function syncToggle(id,val){const el=document.getElementById(id);if(!el)return;el.classList.toggle('on',val);el.classList.toggle('off',!val)}
 async function toggleSetting(key,el){el.classList.toggle('on');el.classList.toggle('off');settings[key]=el.classList.contains('on');settings.goalHours=goalH;await window.api.saveSettings(settings)}
 function adjGoal(d){goalH=Math.max(1,Math.min(12,goalH+d));document.getElementById('goalVal').textContent=goalH+'h';settings.goalHours=goalH;window.api.saveSettings(settings)}
 function applyStreakColors(c1,c2,c3,c4){const r=document.documentElement;r.style.setProperty('--sc1',c1);r.style.setProperty('--sc2',c2);r.style.setProperty('--sc3',c3);r.style.setProperty('--sc4',c4)}
 function setColor(name,c1,c2,c3,c4,sw){document.querySelectorAll('.swatch').forEach(s=>s.classList.remove('sel'));sw.classList.add('sel');applyStreakColors(c1,c2,c3,c4);settings.streakColor=name;settings.goalHours=goalH;window.api.saveSettings(settings)}
+function setWidgetTheme(theme){document.querySelectorAll('.theme-pill').forEach(p=>p.classList.toggle('sel',p.dataset.theme===theme));settings.widgetTheme=theme;settings.goalHours=goalH;window.api.saveSettings(settings)}
 
 init()
 </script>
@@ -910,6 +1088,7 @@ async function syncWithCloud(uid) {
     buildStreak(mergedSessions)
     buildBarChart(mergedSessions)
     buildSiteDist(mergedSites, mergedSessions)
+    buildInsights(mergedSessions)
     if (document.getElementById('view-sites').classList.contains('active')) renderSiteCards(mergedSites, mergedSessions)
 
     const lbl = document.getElementById('acc-sync-lbl')

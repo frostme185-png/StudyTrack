@@ -13,21 +13,44 @@
   --bg:rgba(28,28,30,0.96);--bg2:rgba(50,50,52,0.92);
   --text:#f0f0f0;--text2:#aaa;--text3:#666;--border:rgba(255,255,255,0.11);
 }}
-html,body{background:transparent;font-family:-apple-system,'Segoe UI',sans-serif;width:200px;height:230px;overflow:hidden;user-select:none}
+html,body{background:transparent;font-family:-apple-system,'Segoe UI',sans-serif;width:200px;height:258px;overflow:hidden;user-select:none}
 
 .widget{
   background:var(--bg);border:1px solid var(--border);border-radius:14px;
   padding:11px 13px 13px;width:200px;
   backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
   box-shadow:0 4px 24px rgba(0,0,0,.18);
+  position:relative;overflow:hidden;
 }
+
+/* ── Widget themes ── (#6 personalization: pick a look in Settings → Display) */
+body[data-theme="gradient"] .widget{background:linear-gradient(135deg, var(--accent) 0%, rgba(0,0,0,.55) 100%);border-color:transparent}
+body[data-theme="gradient"] .timer,body[data-theme="gradient"] .ring-pct,body[data-theme="gradient"] .hd-title{color:#fff}
+body[data-theme="gradient"] .site-lbl{color:rgba(255,255,255,.75)}
+body[data-theme="gradient"] .ring-bg{stroke:rgba(255,255,255,.25)}
+body[data-theme="gradient"] .ring-fill{stroke:#fff}
+body[data-theme="gradient"] .open-btn{background:rgba(255,255,255,.18);color:#fff;border-color:rgba(255,255,255,.3)}
+
+body[data-theme="glass"] .widget{background:rgba(10,10,14,0.5);border:1px solid rgba(255,255,255,.14)}
+body[data-theme="glass"] .timer,body[data-theme="glass"] .hd-title{color:#f5f5f5}
+body[data-theme="glass"] .site-lbl,body[data-theme="glass"] .ring-pct{color:#cfd2d6}
+body[data-theme="glass"] .ring-bg{stroke:rgba(255,255,255,.14)}
+body[data-theme="glass"] .open-btn{background:rgba(255,255,255,.08);color:#f0f0f0;border-color:rgba(255,255,255,.16)}
+
+body[data-theme="neon"] .widget{background:#0a0a0f;border:1px solid var(--accent);box-shadow:0 0 18px var(--accent)}
+body[data-theme="neon"] .timer{color:var(--accent);text-shadow:0 0 8px var(--accent),0 0 18px var(--accent)}
+body[data-theme="neon"] .hd-title,body[data-theme="neon"] .site-lbl,body[data-theme="neon"] .ring-pct{color:#9aa0aa}
+body[data-theme="neon"] .ring-bg{stroke:#1a1a22}
+body[data-theme="neon"] .ring-fill{filter:drop-shadow(0 0 4px var(--accent))}
+body[data-theme="neon"] .open-btn{background:#14141c;color:var(--accent);border-color:var(--accent)}
 
 /* Header */
 .hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;cursor:move}
 .hd-left{display:flex;align-items:center;gap:5px}
 .hd-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0;transition:background .3s}
-.hd-dot.on{background:var(--accent);box-shadow:0 0 0 2px rgba(29,158,117,.25)}
+.hd-dot.on{background:var(--accent);box-shadow:0 0 0 2px rgba(29,158,117,.25);animation:dotPulse 1.6s ease-in-out infinite}
 .hd-dot.idle{background:#EF9F27}
+@keyframes dotPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.5)}}
 .hd-title{font-size:11px;font-weight:600;color:var(--text2)}
 .hd-close{
   width:16px;height:16px;border-radius:50%;border:none;
@@ -38,35 +61,43 @@ html,body{background:transparent;font-family:-apple-system,'Segoe UI',sans-serif
 }
 .hd-close:hover{background:rgba(226,75,74,0.35)}
 
-/* Timer — this is the main number, counts up every second */
+/* ── Progress ring (#3) — replaces the old flat bar with a circular goal gauge,
+   the timer + percent sit inside it so the whole thing reads as one gauge. */
+.ring-wrap{position:relative;width:128px;height:128px;margin:4px auto 6px}
+.ring-svg{width:128px;height:128px;transform:rotate(-90deg)}
+.ring-bg{fill:none;stroke:var(--bg2);stroke-width:8}
+.ring-fill{fill:none;stroke:var(--accent);stroke-width:8;stroke-linecap:round;transition:stroke-dashoffset .4s,stroke .3s}
+.ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
 .timer{
-  font-size:34px;font-weight:600;letter-spacing:-.03em;
-  color:var(--text);text-align:center;font-variant-numeric:tabular-nums;
-  line-height:1;margin:2px 0 4px;
+  font-size:18px;font-weight:600;letter-spacing:-.02em;
+  color:var(--text);text-align:center;font-variant-numeric:tabular-nums;line-height:1;
 }
+.ring-pct{font-size:10px;color:var(--text3);font-weight:600}
 
-/* Current site label */
-.site-row{display:flex;align-items:center;gap:5px;margin-bottom:10px;min-height:14px}
-.site-lbl{font-size:10px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;text-align:center}
-
-/* Today progress */
-.prog-section{}
-.prog-lbl{display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-bottom:3px}
-.prog-right{display:flex;gap:6px}
-.track{height:5px;background:var(--bg2);border-radius:99px;overflow:hidden}
-.fill{height:100%;border-radius:99px;background:var(--accent);transition:width .4s}
+/* Current site label + mascot (#5: emoji reflects state — waiting/tracking/idle/goal hit) */
+.site-row{display:flex;align-items:center;justify-content:center;gap:5px;margin-bottom:8px;min-height:14px}
+.mascot{font-size:12px;line-height:1;flex-shrink:0}
+.site-lbl{font-size:10px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
 
 /* Open btn */
 .open-btn{
-  width:100%;margin-top:10px;font-size:11px;font-weight:500;padding:5px;
+  width:100%;font-size:11px;font-weight:500;padding:5px;
   border-radius:7px;border:1px solid var(--border);background:var(--bg2);
   cursor:pointer;color:var(--text);-webkit-app-region:no-drag;
 }
 .open-btn:hover{opacity:.8}
+
+/* ── Goal-reached confetti burst (#4) — a handful of emoji particles spawned
+   once per day the goal is first hit, animated up-and-out then removed. */
+.confetti{position:absolute;font-size:14px;pointer-events:none;animation:confettiPop 1.1s ease-out forwards}
+@keyframes confettiPop{
+  0%{transform:translate(0,0) rotate(0deg);opacity:1}
+  100%{transform:translate(var(--dx),var(--dy)) rotate(var(--rot));opacity:0}
+}
 </style>
 </head>
 <body>
-<div class="widget">
+<div class="widget" id="widgetRoot">
   <div class="hd">
     <div class="hd-left">
       <div class="hd-dot" id="hdDot"></div>
@@ -75,24 +106,22 @@ html,body{background:transparent;font-family:-apple-system,'Segoe UI',sans-serif
     <button class="hd-close" onclick="window.api.closeSticky()" title="Close widget">✕</button>
   </div>
 
-  <!-- Big timer: counts up every second, shows today's total study time -->
-  <div class="timer" id="timer">00:00:00</div>
-
-  <!-- Current site being tracked -->
-  <div class="site-row">
-    <span class="site-lbl" id="siteLbl">—</span>
+  <!-- Circular goal-progress ring with the live timer inside -->
+  <div class="ring-wrap">
+    <svg class="ring-svg" viewBox="0 0 100 100">
+      <circle class="ring-bg" cx="50" cy="50" r="42"></circle>
+      <circle class="ring-fill" id="ringFill" cx="50" cy="50" r="42"></circle>
+    </svg>
+    <div class="ring-center">
+      <div class="timer" id="timer">00:00:00</div>
+      <div class="ring-pct" id="pctLbl">0%</div>
+    </div>
   </div>
 
-  <!-- Today progress toward goal -->
-  <div class="prog-section">
-    <div class="prog-lbl">
-      <span>Today</span>
-      <div class="prog-right">
-        <span id="todayHM">0m</span>
-        <span id="pctLbl">0%</span>
-      </div>
-    </div>
-    <div class="track"><div class="fill" id="fill" style="width:0%"></div></div>
+  <!-- Current site being tracked, with a mascot emoji reflecting current state -->
+  <div class="site-row">
+    <span class="mascot" id="mascot">⏳</span>
+    <span class="site-lbl" id="siteLbl">—</span>
   </div>
 
   <button class="open-btn" onclick="window.api.openMain()">Open Dashboard</button>
@@ -104,21 +133,24 @@ let savedSecs     = 0    // seconds already in sessions[] for today
 let liveAutoSecs  = 0    // current auto-track session (not yet saved), from main
 let manualSecs    = 0    // current manual session running in renderer
 let manualRunning = false
+let isIdleNow     = false
+let celebratedDate = null   // date string already celebrated with confetti, or null
 
 // The clock that drives the big timer number
 // Runs every second; adds 1 if we are actively tracking (auto or manual)
-let lastTickMs  = Date.now()
 let isTracking  = false   // true when auto-track has an active site
+
+const RING_R = 42, RING_CIRC = 2 * Math.PI * RING_R
+const STREAK_COLORS = { green: '#1D9E75', blue: '#378ADD', pink: '#D4537E', purple: '#7F77DD' }
 
 function fmt(s) {
   s = Math.max(0, s)
   return [Math.floor(s/3600), Math.floor(s%3600/60), s%60]
     .map(v => String(v).padStart(2,'0')).join(':')
 }
-function secsToHM(s) {
-  s = Math.max(0, s)
-  const h = Math.floor(s/3600), m = Math.floor(s%3600/60)
-  return h > 0 ? `${h}h ${m}m` : `${m}m`
+function todayStr() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
 
 // Total seconds to show = saved + current live auto session + manual if running
@@ -126,13 +158,50 @@ function totalDisplay() {
   return savedSecs + liveAutoSecs + (manualRunning ? manualSecs : 0)
 }
 
+// #5 — one emoji that summarizes "what's going on" at a glance, priority:
+// goal hit > idle > actively tracking > just waiting.
+function updateMascot(pct) {
+  const el = document.getElementById('mascot')
+  if (pct >= 100) el.textContent = '🎉'
+  else if (isIdleNow) el.textContent = '😴'
+  else if (isTracking || manualRunning) el.textContent = '🔥'
+  else el.textContent = '⏳'
+}
+
+// #4 — small celebratory burst, fired once the first time goal is reached each day
+function celebrateGoalIfNeeded(pct) {
+  const today = todayStr()
+  if (pct < 100 || celebratedDate === today) return
+  celebratedDate = today
+  const root = document.getElementById('widgetRoot')
+  const emojis = ['🎉','✨','⭐','🎊']
+  for (let i = 0; i < 8; i++) {
+    const p = document.createElement('span')
+    p.className = 'confetti'
+    p.textContent = emojis[i % emojis.length]
+    const dx = (Math.random() - 0.5) * 140
+    const dy = -60 - Math.random() * 60
+    p.style.setProperty('--dx', dx + 'px')
+    p.style.setProperty('--dy', dy + 'px')
+    p.style.setProperty('--rot', (Math.random()*60 - 30) + 'deg')
+    p.style.left = (40 + Math.random()*120) + 'px'
+    p.style.top  = (60 + Math.random()*40) + 'px'
+    root.appendChild(p)
+    p.addEventListener('animationend', () => p.remove())
+  }
+}
+
 function refreshUI() {
   const total = totalDisplay()
-  document.getElementById('timer').textContent   = fmt(total)
-  document.getElementById('todayHM').textContent = secsToHM(total)
   const pct = Math.min(100, Math.round(total / goalSecs * 100))
-  document.getElementById('pctLbl').textContent  = pct + '%'
-  document.getElementById('fill').style.width    = pct + '%'
+  document.getElementById('timer').textContent  = fmt(total)
+  document.getElementById('pctLbl').textContent = pct + '%'
+  const offset = RING_CIRC * (1 - pct / 100)
+  const ring = document.getElementById('ringFill')
+  ring.style.strokeDasharray  = RING_CIRC
+  ring.style.strokeDashoffset = offset
+  updateMascot(pct)
+  celebrateGoalIfNeeded(pct)
 }
 
 // Called every second by setInterval — increments liveAutoSecs if tracking
@@ -146,11 +215,21 @@ setInterval(() => {
   }
 }, 1000)
 
+// #1/#6 — reflect the dashboard's streak color + chosen widget theme here too,
+// instead of a hardcoded accent — this is the same personalization already
+// available in Settings, just not wired into the widget before.
+function applyPersonalization(settings) {
+  const accent = STREAK_COLORS[settings?.streakColor] || STREAK_COLORS.green
+  document.documentElement.style.setProperty('--accent', accent)
+  document.body.dataset.theme = settings?.widgetTheme || 'minimal'
+}
+
 // ── Events from main ─────────────────────────────────────────
 
 window.api.on('auto-track-update', p => {
   if (p.domain) {
     isTracking = true
+    isIdleNow = false
     // IMPORTANT: must use liveUnflushed (seconds not yet on disk), NOT accumSecs
     // (which is the whole session's total and keeps growing across periodic
     // flushes). savedSecs already includes everything flushed so far, so adding
@@ -158,7 +237,7 @@ window.api.on('auto-track-update', p => {
     // that's what caused the widget to briefly dip then jump far ahead.
     liveAutoSecs = p.liveUnflushed ?? 0
     document.getElementById('hdDot').className  = 'hd-dot on'
-    document.getElementById('siteLbl').textContent = `● ${p.siteName}`
+    document.getElementById('siteLbl').textContent = p.siteName
   } else {
     if (isTracking) {
       // just left a study site — liveAutoSecs will be flushed by main
@@ -180,17 +259,19 @@ window.api.on('stats-updated', p => {
 })
 
 window.api.on('idle-state', isIdle => {
+  isIdleNow = isIdle
   if (isIdle) {
     isTracking = false
     document.getElementById('hdDot').className     = 'hd-dot idle'
-    document.getElementById('siteLbl').textContent = '⏸ Idle — paused'
+    document.getElementById('siteLbl').textContent = 'Idle — paused'
     liveAutoSecs = 0
-    refreshUI()
   }
+  refreshUI()
 })
 
 window.api.on('settings-updated', s => {
   goalSecs = (s.goalHours || 3) * 3600
+  applyPersonalization(s)
   refreshUI()
 })
 
@@ -206,6 +287,7 @@ async function init() {
   const data  = await window.api.getData()
   goalSecs    = (data.settings?.goalHours || 3) * 3600
   savedSecs   = data.todaySeconds || 0
+  applyPersonalization(data.settings)
   refreshUI()
   document.getElementById('siteLbl').textContent = 'Waiting for activity...'
 }
