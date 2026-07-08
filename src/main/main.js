@@ -18,10 +18,12 @@ function loadData() {
       { name: 'Duolingo',     domain: 'duolingo.com',    color: '#7F77DD' },
     ],
     sessions: [],
+    deletedSites: [],
+    deletedSessions: [],
     settings: {
       goalHours: 3, autoTrack: true, idlePause: true,
       notifications: true, startOnBoot: false,
-      streakColor: 'green', showSticky: true,
+      streakColor: 'green', accentColor: 'green', dashTheme: 'default', showSticky: true,
     }
   }
 }
@@ -35,6 +37,8 @@ function saveData(d) {
   } catch {}
 }
 let appData = loadData()
+if (!Array.isArray(appData.deletedSites)) appData.deletedSites = []
+if (!Array.isArray(appData.deletedSessions)) appData.deletedSessions = []
 
 // Stable per-install id so cloud-synced sessions can be tagged by the device
 // that recorded them. Without this, merging two devices' sessions by
@@ -60,11 +64,39 @@ function normalizeDomain(input) {
 // session instead of appending a new row every flush — keeps data.json from
 // growing one entry per 30s tick and makes "Website Breakdown" sums accurate
 // without needing to group at read time.
-function addOrMergeSession(domain, seconds, manual) {
+// Mirrors sessionKey() in index.html's sync code — identifies a session row
+// for tombstoning, same shape used to key the merge-dedup map.
+function sessionKey(s) { return `${s.domain}|${s.date}|${!!s.manual}|${s.device || 'legacy'}` }
+
+// hours ({hourOfDay: seconds}) rides along the same row — it must be recorded
+// at capture time because a day-level total can't be split back into hours later.
+function addOrMergeSession(domain, seconds, manual, hours) {
   const date = todayStr()
-  const existing = appData.sessions.find(s => s.domain === domain && s.date === date && !!s.manual === !!manual && s.device === DEVICE_ID)
-  if (existing) existing.seconds += seconds
-  else appData.sessions.push({ domain, seconds, manual, date, device: DEVICE_ID })
+  let row = appData.sessions.find(s => s.domain === domain && s.date === date && !!s.manual === !!manual && s.device === DEVICE_ID)
+  if (!row) { row = { domain, seconds: 0, manual, date, device: DEVICE_ID }; appData.sessions.push(row) }
+  row.seconds += seconds
+  if (hours) {
+    row.hours = row.hours || {}
+    for (const h in hours) row.hours[h] = (row.hours[h] || 0) + hours[h]
+  }
+}
+
+// The manual timer runs continuously right up to the moment it's stopped, so
+// its hour buckets can be recovered by walking the duration backwards from
+// "now" across each hour boundary it crossed — no per-tick state needed.
+function hoursSpread(seconds) {
+  const hours = {}
+  const end = Date.now()
+  let t = end - seconds * 1000
+  while (t < end) {
+    const d = new Date(t)
+    const next = new Date(t); next.setMinutes(60, 0, 0)
+    const chunkEnd = Math.min(next.getTime(), end)
+    const secs = Math.round((chunkEnd - t) / 1000)
+    if (secs > 0) hours[d.getHours()] = (hours[d.getHours()] || 0) + secs
+    t = chunkEnd
+  }
+  return hours
 }
 
 // ── Windows ───────────────────────────────────────────────────
@@ -99,7 +131,8 @@ function createStickyWindow() {
 }
 
 function createTray() {
-  tray = new Tray(nativeImage.createEmpty())
+  const icon = nativeImage.createFromPath(path.join(__dirname, '../../assets/icon.ico'))
+  tray = new Tray(icon.resize({ width: 16, height: 16 }))
   tray.setToolTip('StudyTrack')
   rebuildTrayMenu()
   tray.on('click', () => { if (mainWin) mainWin.show(); else createMainWindow() })
@@ -459,6 +492,7 @@ function getRunningApps(callback) {
 let autoCurrentDomain = null   // domain being tracked right now
 let autoAccumSecs     = 0      // seconds for current session (not yet flushed)
 let todayLiveExtra    = 0      // live seconds not yet in sessions[] (auto)
+let liveHours         = {}     // hourOfDay → unflushed seconds; mirrors todayLiveExtra, reset together
 let lastFlushTime     = Date.now()
 let trackInterval     = null
 
@@ -563,6 +597,8 @@ function onTitleResolved(info) {
     autoCurrentDomain = effective.domain
     autoAccumSecs    += 1   // total seconds of this continuous session — only reset on switch/leave/idle
     todayLiveExtra   += 1   // seconds not yet written to disk — reset on every flush (periodic or full stop)
+    const hr = new Date().getHours()
+    liveHours[hr] = (liveHours[hr] || 0) + 1
 
     const todaySecs = todaySeconds() + todayLiveExtra
 
@@ -596,10 +632,11 @@ function onTitleResolved(info) {
 // stop=false is a periodic checkpoint write — keeps autoCurrentDomain/autoAccumSecs running.
 function flushAutoSession(reason, stop = true) {
   if (autoCurrentDomain && todayLiveExtra >= 2) {
-    addOrMergeSession(autoCurrentDomain, todayLiveExtra, false)
+    addOrMergeSession(autoCurrentDomain, todayLiveExtra, false, liveHours)
     saveData(appData)
     lastFlushTime  = Date.now()
     todayLiveExtra = 0   // now counted in sessions[]
+    liveHours      = {}
   }
   if (stop) {
     autoCurrentDomain = null
@@ -650,9 +687,9 @@ function initAutoUpdater() {
     dialog.showMessageBox({
       type: 'info',
       title: 'StudyTrack',
-      message: 'Đã có bản cập nhật mới',
-      detail: 'Bản cập nhật đã tải xong. Khởi động lại StudyTrack để cài đặt?',
-      buttons: ['Khởi động lại ngay', 'Để sau'],
+      message: 'A new update is available',
+      detail: 'The update has finished downloading. Restart StudyTrack to install it?',
+      buttons: ['Restart now', 'Later'],
       defaultId: 0,
       cancelId: 1,
     }).then(({ response }) => {
@@ -681,8 +718,8 @@ function checkDailyReminder() {
   if (!Notification.isSupported()) return
   const remainingMin = Math.max(1, Math.round((goalSecs - totalSecs) / 60))
   const n = new Notification({
-    title: 'StudyTrack — chưa đạt mục tiêu hôm nay',
-    body: `Còn thiếu khoảng ${remainingMin} phút để đạt mục tiêu ${appData.settings.goalHours || 3}h hôm nay.`,
+    title: 'StudyTrack — goal not reached today',
+    body: `About ${remainingMin} more minutes to reach today's ${appData.settings.goalHours || 3}h goal.`,
   })
   n.on('click', () => { if (mainWin) { mainWin.show(); mainWin.focus() } else createMainWindow() })
   n.show()
@@ -691,6 +728,8 @@ function checkDailyReminder() {
 // ── IPC ───────────────────────────────────────────────────────
 ipcMain.handle('get-data', () => ({
   ...appData,
+  deletedSites: appData.deletedSites || [],
+  deletedSessions: appData.deletedSessions || [],
   todaySeconds: todaySeconds() + todayLiveExtra,
   streak: streakDays(),
   trackingMethod
@@ -741,15 +780,35 @@ function normalizeSiteEntry(site) {
   return { ...site, domain: normalizeDomain(site.domain) }
 }
 
+// Re-adding a domain that was previously removed means the user wants it
+// tracked again, so any tombstone for it must be cleared — otherwise the
+// next cloud sync would treat it as still-deleted and merge it back out.
+function clearTombstone(domain) {
+  appData.deletedSites = appData.deletedSites.filter(d => d.domain !== domain)
+}
+
 ipcMain.handle('add-site', (_, site) => {
-  appData.sites.push(normalizeSiteEntry(site))
+  const entry = normalizeSiteEntry(site)
+  appData.sites.push(entry)
+  clearTombstone(entry.domain)
   saveData(appData)
   return appData.sites
 })
-ipcMain.handle('remove-site', (_, domain) => { appData.sites = appData.sites.filter(s => s.domain !== domain); saveData(appData); return appData.sites })
+// Removing only locally isn't enough: the next periodic sync would re-merge
+// this domain back in from Firestore (which still has the old copy). Record
+// a tombstone (domain + timestamp) so the merge in syncWithCloud knows to
+// drop it everywhere, not just here.
+ipcMain.handle('remove-site', (_, domain) => {
+  appData.sites = appData.sites.filter(s => s.domain !== domain)
+  appData.deletedSites = appData.deletedSites.filter(d => d.domain !== domain)
+  appData.deletedSites.push({ domain, deletedAt: Date.now() })
+  saveData(appData)
+  return appData.sites
+})
 ipcMain.handle('update-site', (_, { domain, site }) => {
   const idx = appData.sites.findIndex(s => s.domain === domain)
   if (idx !== -1) appData.sites[idx] = normalizeSiteEntry(site)
+  clearTombstone(domain)
   saveData(appData)
   return appData.sites
 })
@@ -764,11 +823,18 @@ ipcMain.handle('update-site', (_, { domain, site }) => {
 // synced set; this device's own rows stay whatever main.js currently has.
 const isOwnRow = s => !s.device || s.device === DEVICE_ID
 
-ipcMain.handle('apply-synced-data', (_, { sites, sessions }) => {
-  if (Array.isArray(sites)) appData.sites = sites
+ipcMain.handle('apply-synced-data', (_, { sites, sessions, deletedSites, deletedSessions }) => {
+  if (Array.isArray(deletedSites)) appData.deletedSites = deletedSites
+  if (Array.isArray(deletedSessions)) appData.deletedSessions = deletedSessions
+  if (Array.isArray(sites)) {
+    const deadDomains = new Set((appData.deletedSites || []).map(d => d.domain))
+    appData.sites = sites.filter(s => !deadDomains.has(s.domain))
+  }
   if (Array.isArray(sessions)) {
-    const ownRows   = appData.sessions.filter(isOwnRow)
-    const otherRows = sessions.filter(s => !isOwnRow(s))
+    const deadKeys    = new Set((appData.deletedSessions || []).map(d => d.key))
+    const deadDomains = new Set((appData.deletedSites    || []).map(d => d.domain))
+    const ownRows     = appData.sessions.filter(isOwnRow)
+    const otherRows   = sessions.filter(s => !isOwnRow(s) && !deadKeys.has(sessionKey(s)) && !deadDomains.has(s.domain))
     appData.sessions = [...ownRows, ...otherRows]
   }
   saveData(appData)
@@ -780,7 +846,7 @@ ipcMain.handle('apply-synced-data', (_, { sites, sessions }) => {
 
 ipcMain.handle('log-session', (_, session) => {
   if (!session || session.seconds < 2) return { todaySeconds: todaySeconds() + todayLiveExtra, streak: streakDays() }
-  addOrMergeSession(session.domain, session.seconds, true)
+  addOrMergeSession(session.domain, session.seconds, true, hoursSpread(session.seconds))
   saveData(appData)
   const payload = { todaySeconds: todaySeconds() + todayLiveExtra, streak: streakDays() }
   send(stickyWin, 'stats-updated', payload)   // ← sync widget on manual save

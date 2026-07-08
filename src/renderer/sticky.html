@@ -44,6 +44,23 @@ body[data-theme="neon"] .ring-bg{stroke:#1a1a22}
 body[data-theme="neon"] .ring-fill{filter:drop-shadow(0 0 4px var(--accent))}
 body[data-theme="neon"] .open-btn{background:#14141c;color:var(--accent);border-color:var(--accent)}
 
+/* Solid — flat card in the chosen accent color, no gradient/blur */
+body[data-theme="solid"] .widget{background:var(--accent);border-color:transparent}
+body[data-theme="solid"] .timer,body[data-theme="solid"] .ring-pct,body[data-theme="solid"] .hd-title{color:#fff}
+body[data-theme="solid"] .site-lbl{color:rgba(255,255,255,.75)}
+body[data-theme="solid"] .ring-bg{stroke:rgba(255,255,255,.25)}
+body[data-theme="solid"] .ring-fill{stroke:#fff}
+body[data-theme="solid"] .open-btn{background:rgba(255,255,255,.18);color:#fff;border-color:rgba(255,255,255,.3)}
+
+/* Mono — deliberately ignores the accent color; grayscale, least distracting */
+body[data-theme="mono"] .widget{background:#111114;border:1px solid #303035}
+body[data-theme="mono"] .timer,body[data-theme="mono"] .hd-title{color:#eaeaea}
+body[data-theme="mono"] .site-lbl,body[data-theme="mono"] .ring-pct{color:#8a8a8a}
+body[data-theme="mono"] .ring-bg{stroke:#2a2a2e}
+body[data-theme="mono"] .ring-fill{stroke:#eaeaea}
+body[data-theme="mono"] .open-btn{background:#1a1a1d;color:#ddd;border-color:#303035}
+body[data-theme="mono"] .hd-dot.on{background:#eaeaea;box-shadow:0 0 0 2px rgba(255,255,255,.15)}
+
 /* Header */
 .hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;cursor:move}
 .hd-left{display:flex;align-items:center;gap:5px}
@@ -141,7 +158,12 @@ let celebratedDate = null   // date string already celebrated with confetti, or 
 let isTracking  = false   // true when auto-track has an active site
 
 const RING_R = 42, RING_CIRC = 2 * Math.PI * RING_R
-const STREAK_COLORS = { green: '#1D9E75', blue: '#378ADD', pink: '#D4537E', purple: '#7F77DD' }
+// Must stay in sync with index.html's ACCENT_PALETTE — no shared module
+// between the two renderer files (see CLAUDE.md).
+const ACCENT_COLORS = {
+  green: '#1D9E75', blue: '#378ADD', pink: '#D4537E', purple: '#7F77DD',
+  orange: '#C9710D', coral: '#B8331E', gray: '#6B6B6B',
+}
 
 function fmt(s) {
   s = Math.max(0, s)
@@ -219,7 +241,8 @@ setInterval(() => {
 // instead of a hardcoded accent — this is the same personalization already
 // available in Settings, just not wired into the widget before.
 function applyPersonalization(settings) {
-  const accent = STREAK_COLORS[settings?.streakColor] || STREAK_COLORS.green
+  const name = settings?.accentColor || settings?.streakColor || 'green'
+  const accent = ACCENT_COLORS[name] || ACCENT_COLORS.green
   document.documentElement.style.setProperty('--accent', accent)
   document.body.dataset.theme = settings?.widgetTheme || 'minimal'
 }
