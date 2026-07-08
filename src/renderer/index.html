@@ -748,8 +748,15 @@ function buildInsights(sessions) {
     }
     return sum
   }
-  const last7 = sumDaysRange(0, 7)
-  const prev7 = sumDaysRange(7, 7)
+  // Anchor to the actual calendar week (Monday start), not a rolling 7-day
+  // window — otherwise "tuần này"/"tuần trước" silently meant "last 7 days"
+  // vs "the 7 days before that", which drifts from the calendar week shown
+  // elsewhere in the UI. Compare the same number of elapsed days on both
+  // sides (e.g. Mon-Wed this week vs Mon-Wed last week) so a partial current
+  // week isn't unfairly compared against a full previous week.
+  const daysElapsedThisWeek = (today.getDay() + 6) % 7 + 1
+  const last7 = sumDaysRange(0, daysElapsedThisWeek)
+  const prev7 = sumDaysRange(7, daysElapsedThisWeek)
   const pct = prev7 > 0 ? Math.round((last7 - prev7) / prev7 * 100) : null
 
   if (trendEl) {
@@ -766,6 +773,28 @@ function buildInsights(sessions) {
     else rows.push({ ic:'➖', text:`Tuần này bạn học bằng tuần trước (${secsToHM(last7)}).` })
   } else if (last7 > 0) {
     rows.push({ ic:'📈', text:`Bạn đã học ${secsToHM(last7)} trong 7 ngày qua.` })
+  }
+
+  // Goal hit-rate — % of days in the trailing window that hit goalHours.
+  // Window is capped to days since the first ever session so a brand-new
+  // install isn't penalized for days before tracking even started.
+  {
+    const allDates = Object.keys(byDate)
+    const firstDate = allDates.reduce((a, b) => a < b ? a : b)
+    const [fy, fm, fd] = firstDate.split('-').map(Number)
+    const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    const daysSinceFirst = Math.round((todayMid - new Date(fy, fm - 1, fd)) / 86400000) + 1
+    const goalWindow = Math.max(1, Math.min(30, daysSinceFirst))
+    const goalSecs = goalH * 3600
+    let hitDays = 0
+    for (let i = 0; i < goalWindow; i++) {
+      const d = new Date(today); d.setDate(today.getDate() - i)
+      if ((byDate[dateStr(d)] || 0) >= goalSecs) hitDays++
+    }
+    if (goalWindow >= 3) {
+      const hitPct = Math.round(hitDays / goalWindow * 100)
+      rows.push({ ic:'🎯', text:`Bạn đạt mục tiêu ${goalH}h vào <b>${hitDays}/${goalWindow}</b> ngày gần đây (<b>${hitPct}%</b>).` })
+    }
   }
 
   // Best weekday — average per occurrence, not total (so a weekday that just

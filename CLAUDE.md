@@ -39,6 +39,17 @@ No framework, no bundler, no TypeScript — plain HTML/CSS/JS in the renderer, p
 - `matchSite(info)` — website entries match by domain keyword in title; app entries match by exact process name (case-insensitive). Shared keyword logic lives in `matchesByTitle()`.
 - Cross-process string passing uses `\x01` as a field separator (titles/URLs can contain `|`, so plain pipe-delimiting was unsafe). When editing the PowerShell scripts, the separator is written as `` $([char]1) `` — don't try to type a literal control character into a string edit; use `[char]1` in PowerShell or `'\x01'` in JS.
 
+## Insights (Dashboard)
+
+Self-serve analytics built from `sessions[]` already in memory — no extra tracking. Lives in `buildInsights()` in `index.html`, rendered into `#insightsBox`.
+
+- **Trend vs last week** — anchored to the actual Monday-start calendar week (not a rolling 7-day window), comparing the same number of elapsed days on both sides so a partial current week isn't unfairly stacked against a full previous week.
+- **Goal hit-rate** — % of days in a trailing window that hit `goalHours`; window caps at 30 days but shrinks to days-since-first-session so a new install isn't penalized for days before tracking started. Only shown once ≥3 days of history exist.
+- **Best weekday** — average seconds per occurrence (not total), so a weekday with more calendar occurrences in the data doesn't win unfairly.
+- **Top site this month** — % share of this month's total time.
+
+`sessions[]` only stores one row per `domain`+`date`+`device` (merged, see `addOrMergeSession()` in main.js) — there's no intra-day timestamp, so time-of-day or session-length insights aren't possible without a data model change.
+
 ## Cloud sync
 
 - Firebase Auth (email/password) + Firestore, loaded via CDN ES module imports directly in `index.html` (no npm package) — requires internet to load that script block; rest of the app works offline.
