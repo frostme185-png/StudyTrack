@@ -73,8 +73,9 @@ Installed copies auto-check GitHub Releases on launch and silently download newe
 
 - **Auto-track** — websites (by domain keyword in window title) and native apps (by process name, e.g. `claude`, `Code`) you add to the tracked list.
 - **Manual timer** — time a one-off site/tab without adding it permanently.
-- **Dashboard** — streak calendar (6 months), last-7-days chart, website/app breakdown, auto-generated insights (week-over-week trend, best weekday, top site).
-- **Floating widget** — always-on-top progress ring, 4 themes (Minimal/Gradient/Glass/Neon), follows the dashboard's accent color.
+- **Dashboard** — streak calendar (6 months), last-7-days chart, website/app breakdown, auto-generated insights (week-over-week trend, goal hit-rate, best weekday, top site).
+- **Level & Badges** — 21-rank level and 10 one-time badges derived from your existing hours/streak data, no extra tracking. Non-punitive: a level never drops and a badge never gets revoked. Custom icons optional (`assets/badges/`), falls back to emoji.
+- **Floating widget** — always-on-top progress ring, 6 themes (Minimal/Gradient/Glass/Neon/Solid/Mono), follows the dashboard's accent color, plus a collapsible badge strip.
 - **Cloud sync** — optional email/password login, syncs sessions across devices via Firebase (per-device merge, safe against double-counting).
 - **Daily reminder** — desktop notification at a configurable hour if today's goal isn't met.
 - **Auto-update** — checks GitHub Releases on launch, downloads silently, prompts to restart when ready.
@@ -107,11 +108,13 @@ StudyTrack/
 │   │   ├── main.js                    ← Electron main process: tracking, IPC, auto-update, notifications
 │   │   └── preload.js                 ← Secure bridge main ↔ renderer
 │   └── renderer/
-│       ├── index.html                 ← Main window UI (Dashboard, Websites, Debug, Settings, Account)
+│       ├── index.html                 ← Main window UI (Dashboard, Tracking, Settings, Account — Debug lives inside Settings)
 │       ├── sticky.html                ← Floating widget
+│       ├── achievements.js            ← Level/Badges data + logic, shared by index.html and sticky.html
 │       ├── firebase-config.example.js ← Template — copy to firebase-config.js with your own project
 │       └── firebase-config.js         ← Your real config (gitignored, not in repo)
 ├── assets/
-│   └── icon.ico                       ← App icon (must exist before building)
+│   ├── icon.ico                       ← App icon (must exist before building)
+│   └── badges/                        ← Optional custom Level/Badge icons (SVG/PNG) — see badges/README.md
 └── package.json
 ```
