@@ -84,11 +84,15 @@ function createMainWindow() {
   mainWin.on('closed', () => { mainWin = null })
 }
 
+// Widget stays this compact by default; only grows when the badge strip is
+// toggled open (see 'set-sticky-expanded' below) — not a permanent resize.
+const STICKY_W = 200, STICKY_H_COMPACT = 258, STICKY_H_EXPANDED = 258 + 122
+
 function createStickyWindow() {
   const x = appData.settings.stickyX ?? 40
   const y = appData.settings.stickyY ?? 40
   stickyWin = new BrowserWindow({
-    width: 200, height: 258, x, y,
+    width: STICKY_W, height: STICKY_H_COMPACT, x, y,
     frame: false, transparent: true, alwaysOnTop: true,
     resizable: false, skipTaskbar: true, hasShadow: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }
@@ -797,6 +801,14 @@ ipcMain.on('open-main',       () => { if (mainWin) mainWin.show(); else createMa
 // and the titlebar pin button (toggle-sticky) use — see setStickyEnabled for
 // why that replaced the old separate runtime-only show/hide.
 ipcMain.on('close-sticky',    () => setStickyEnabled(false))
+// Badge strip toggle — grows/shrinks the widget's own OS window height
+// (resizable:false only blocks user drag-resize, not this) instead of
+// permanently making the widget taller. x/y stay put, so it expands downward.
+ipcMain.on('set-sticky-expanded', (_, expanded) => {
+  if (!stickyWin) return
+  const b = stickyWin.getBounds()
+  stickyWin.setBounds({ x: b.x, y: b.y, width: STICKY_W, height: expanded ? STICKY_H_EXPANDED : STICKY_H_COMPACT })
+})
 // ── Manual drag for sticky widget ──────────────────────────────
 // Native -webkit-app-region:drag freezes the transparent/blurred widget's
 // content mid-move on Windows (OS move loop blocks Chromium repaint until

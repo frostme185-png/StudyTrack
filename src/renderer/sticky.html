@@ -14,6 +14,9 @@
   --text:#f0f0f0;--text2:#aaa;--text3:#666;--border:rgba(255,255,255,0.11);
 }}
 html,body{background:transparent;font-family:-apple-system,'Segoe UI',sans-serif;width:200px;height:258px;overflow:hidden;user-select:none}
+/* Actual height is set inline by toggleBadgeStrip() (needs to match the OS
+   window resize done in main.js's 'set-sticky-expanded' handler — STICKY_H_
+   COMPACT/EXPANDED there must stay in sync with the 258/380 used here). */
 
 .widget{
   background:var(--bg);border:1px solid var(--border);border-radius:14px;
@@ -52,6 +55,16 @@ body[data-theme="neon"] .open-btn{background:#14141c;color:var(--accent);border-
 .hd-dot.idle{background:#EF9F27}
 @keyframes dotPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.5)}}
 .hd-title{font-size:11px;font-weight:600;color:var(--text2)}
+.hd-right{display:flex;align-items:center;gap:5px}
+.hd-badges-btn{
+  width:16px;height:16px;border-radius:50%;border:none;
+  background:var(--bg2);cursor:pointer;color:var(--text2);
+  font-size:9px;display:flex;align-items:center;justify-content:center;
+  -webkit-app-region:no-drag;transition:opacity .15s;flex-shrink:0;
+  line-height:1;padding:0;
+}
+.hd-badges-btn:hover{opacity:.75}
+.hd-badges-btn.open{background:var(--accent);color:#fff}
 .hd-close{
   width:16px;height:16px;border-radius:50%;border:none;
   background:rgba(226,75,74,0.15);cursor:pointer;color:#E24B4A;
@@ -75,9 +88,15 @@ body[data-theme="neon"] .open-btn{background:#14141c;color:var(--accent);border-
 .ring-pct{font-size:10px;color:var(--text3);font-weight:600}
 
 /* Current site label + mascot (#5: emoji reflects state — waiting/tracking/idle/goal hit) */
-.site-row{display:flex;align-items:center;justify-content:center;gap:5px;margin-bottom:8px;min-height:14px}
+.site-row{display:flex;align-items:center;justify-content:center;gap:5px;margin-bottom:8px;min-height:16px}
 .mascot{font-size:12px;line-height:1;flex-shrink:0}
 .site-lbl{font-size:10px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
+
+/* Level icon — always visible (unlike the badge strip below), reflects
+   current all-time-hours tier from achievements.js. Custom SVG/PNG from
+   assets/badges/level-<n>.svg if present, else a built-in emoji fallback. */
+.level-icon{width:15px;height:15px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px}
+.level-icon img{width:100%;height:100%;object-fit:contain}
 
 /* Open btn */
 .open-btn{
@@ -86,6 +105,20 @@ body[data-theme="neon"] .open-btn{background:#14141c;color:var(--accent);border-
   cursor:pointer;color:var(--text);-webkit-app-region:no-drag;
 }
 .open-btn:hover{opacity:.8}
+
+/* Badge strip — collapsed by default, revealed by the 🏅 header button
+   (toggleBadgeStrip()), which also grows the widget's actual OS window
+   height via window.api.setStickyExpanded() instead of the widget always
+   taking up this space. Fixed 5-column grid (2 rows for the 10 BADGES) so
+   all badges show at once with no horizontal scrollbar — must stay in sync
+   with BADGES.length in achievements.js if that count ever changes. */
+.badge-strip{max-height:0;overflow:hidden;transition:max-height .22s ease}
+body.badges-open .badge-strip{max-height:96px;margin:8px 0 12px}
+.badge-strip-hd{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+.badge-strip-row{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.badge-chip{width:100%;aspect-ratio:1;border-radius:6px;background:var(--bg2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px}
+.badge-chip.locked{opacity:.35;filter:grayscale(1)}
+.badge-chip img{width:100%;height:100%;object-fit:contain;border-radius:6px}
 
 /* ── Goal-reached confetti burst (#4) — a handful of emoji particles spawned
    once per day the goal is first hit, animated up-and-out then removed. */
@@ -103,7 +136,10 @@ body[data-theme="neon"] .open-btn{background:#14141c;color:var(--accent);border-
       <div class="hd-dot" id="hdDot"></div>
       <span class="hd-title">StudyTrack</span>
     </div>
-    <button class="hd-close" onclick="window.api.closeSticky()" title="Close widget">✕</button>
+    <div class="hd-right">
+      <button class="hd-badges-btn" id="badgesToggleBtn" onclick="toggleBadgeStrip()" title="Huy hiệu đã đạt">🏅</button>
+      <button class="hd-close" onclick="window.api.closeSticky()" title="Close widget">✕</button>
+    </div>
   </div>
 
   <!-- Circular goal-progress ring with the live timer inside -->
@@ -118,15 +154,24 @@ body[data-theme="neon"] .open-btn{background:#14141c;color:var(--accent);border-
     </div>
   </div>
 
-  <!-- Current site being tracked, with a mascot emoji reflecting current state -->
+  <!-- Current site being tracked, with a mascot emoji reflecting current state,
+       plus the current Level icon (always visible) -->
   <div class="site-row">
+    <div class="level-icon" id="levelIcon" title="">🌱</div>
     <span class="mascot" id="mascot">⏳</span>
     <span class="site-lbl" id="siteLbl">—</span>
+  </div>
+
+  <!-- Collapsed by default — toggled via the 🏅 header button -->
+  <div class="badge-strip" id="badgeStrip">
+    <div class="badge-strip-hd">Huy hiệu</div>
+    <div class="badge-strip-row" id="badgeStripRow"></div>
   </div>
 
   <button class="open-btn" onclick="window.api.openMain()">Open Dashboard</button>
 </div>
 
+<script src="achievements.js"></script>
 <script>
 let goalSecs      = 3 * 3600
 let savedSecs     = 0    // seconds already in sessions[] for today
@@ -135,6 +180,9 @@ let manualSecs    = 0    // current manual session running in renderer
 let manualRunning = false
 let isIdleNow     = false
 let celebratedDate = null   // date string already celebrated with confetti, or null
+let allSessions   = []   // full sessions[], for Level icon + badge strip (achievements.js)
+let currentStreak = 0
+let badgesOpen    = false
 
 // The clock that drives the big timer number
 // Runs every second; adds 1 if we are actively tracking (auto or manual)
@@ -166,6 +214,44 @@ function updateMascot(pct) {
   else if (isIdleNow) el.textContent = '😴'
   else if (isTracking || manualRunning) el.textContent = '🔥'
   else el.textContent = '⏳'
+}
+
+// Level icon (always visible) + badge strip (collapsed behind the 🏅 toggle)
+// — data/rules come from achievements.js, shared with the Dashboard so the
+// two never drift apart. Rebuilt whenever allSessions/currentStreak refresh
+// (init + stats-updated), same cadence as the Dashboard's own rebuilds.
+async function refreshAchievements() {
+  const totalHours = allSessions.reduce((a, s) => a + s.seconds, 0) / 3600
+  const { current } = computeLevel(totalHours)
+  const iconEl = document.getElementById('levelIcon')
+  iconEl.title = `Level ${current.lvl} — ${current.title}`
+  const levelSrc = await resolveAchievementIcon(`level-${current.lvl}`)
+  iconEl.innerHTML = levelSrc ? `<img src="${levelSrc}" alt="">` : '🌱'
+
+  const states = computeBadgeStates(allSessions, currentStreak, goalSecs)
+  const row = document.getElementById('badgeStripRow')
+  row.innerHTML = states.map(b => {
+    const fallback = BADGE_FALLBACK_EMOJI[b.kind] || '🏅'
+    return `<div class="badge-chip ${b.earned ? '' : 'locked'}" id="chip-${b.id}" title="${b.label}">${fallback}</div>`
+  }).join('')
+  states.forEach(async b => {
+    const src = await resolveAchievementIcon(b.id)
+    if (!src) return
+    const el = document.getElementById(`chip-${b.id}`)
+    if (el) el.innerHTML = `<img src="${src}" alt="">`
+  })
+}
+
+// Grows/shrinks the widget's actual OS window (main.js 'set-sticky-expanded')
+// instead of the widget always reserving this space — see STICKY_H_COMPACT/
+// EXPANDED in main.js, which must stay in sync with the 258/380 below.
+function toggleBadgeStrip() {
+  badgesOpen = !badgesOpen
+  document.body.classList.toggle('badges-open', badgesOpen)
+  document.documentElement.style.height = badgesOpen ? '380px' : '258px'
+  document.body.style.height = badgesOpen ? '380px' : '258px'
+  document.getElementById('badgesToggleBtn').classList.toggle('open', badgesOpen)
+  window.api.setStickyExpanded(badgesOpen)
 }
 
 // #4 — small celebratory burst, fired once the first time goal is reached each day
@@ -252,10 +338,17 @@ window.api.on('auto-track-update', p => {
 })
 
 // Fired after main flushes a session to disk (auto or manual)
-window.api.on('stats-updated', p => {
+window.api.on('stats-updated', async p => {
   savedSecs    = p.todaySeconds || 0
   liveAutoSecs = 0   // main already counted these in savedSecs
   refreshUI()
+  // Level/badges change rarely, so re-fetching the full sessions list on this
+  // (infrequent) event is fine — same "always re-fetch, don't trust a stale
+  // cached aggregate" approach syncWithCloud() uses in index.html.
+  currentStreak = p.streak ?? currentStreak
+  const data = await window.api.getData()
+  allSessions = data.sessions || []
+  refreshAchievements()
 })
 
 window.api.on('idle-state', isIdle => {
@@ -277,7 +370,7 @@ window.api.on('settings-updated', s => {
 
 // ── Drag header to move widget ────────────────────────────────
 document.querySelector('.hd').addEventListener('mousedown', e => {
-  if (e.target.closest('.hd-close')) return
+  if (e.target.closest('.hd-close') || e.target.closest('.hd-badges-btn')) return
   window.api.stickyDragStart()
 })
 document.addEventListener('mouseup', () => window.api.stickyDragEnd())
@@ -287,8 +380,11 @@ async function init() {
   const data  = await window.api.getData()
   goalSecs    = (data.settings?.goalHours || 3) * 3600
   savedSecs   = data.todaySeconds || 0
+  allSessions = data.sessions || []
+  currentStreak = data.streak || 0
   applyPersonalization(data.settings)
   refreshUI()
+  refreshAchievements()
   document.getElementById('siteLbl').textContent = 'Waiting for activity...'
 }
 init()

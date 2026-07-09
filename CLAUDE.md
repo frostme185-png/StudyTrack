@@ -50,6 +50,18 @@ Self-serve analytics built from `sessions[]` already in memory — no extra trac
 
 `sessions[]` only stores one row per `domain`+`date`+`device` (merged, see `addOrMergeSession()` in main.js) — there's no intra-day timestamp, so time-of-day or session-length insights aren't possible without a data model change.
 
+## Achievements (Level + Badges)
+
+The one deliberate exception to the anti-gamification principle above — added on request, kept **non-punitive**: both are derived from cumulative, monotonically-increasing totals (all-time hours, current streak), so a level never drops and a badge, once earned, is never revoked. No streak-freezes, no loss mechanics.
+
+Data + pure computation live in `src/renderer/achievements.js` — a plain `<script src>` include (no build step, so this is the only way to share code between `index.html` and `sticky.html` without duplicating it). Both pages load it before their own inline `<script>`.
+
+- **Level** — 21 ranks by cumulative all-time study hours, defined in `LEVELS` (0h → 550h). 6 tiers (Mầm/Học Viên/Chuyên Cần/Tinh Anh/Huyền Thoại/Vĩnh Hằng); tiers 1-5 each split into 4 sub-ranks I-IV, tier 6 ("Vĩnh Hằng") is a single capstone rank with no sub-rank — mirrors Valorant's Radiant sitting alone above Immortal I-III. `computeLevel()`'s current/next lookup is index-generic so the tier/sub-rank split is just data, not special-cased in code.
+- **Badges** — 10 one-time achievements defined in `BADGES`, each with a `kind` that `computeBadgeStates()` maps to a computed value: `hours` (total all-time hours: 10/50/100/500), `streak` (current streak: 7/30/100 days), `sessions` (any session ever — "Bước Đầu Tiên"), `multisite` (max distinct sites/apps studied in one day, peak-so-far — "Đa Nhiệm"), `perfectweek` (any Mon-Sun week, scanned via `hasPerfectWeek()`, where every day hit `goalHours` — "Tuần Hoàn Hảo"). All five kinds are monotonic (peaks/counts/any-ever), so every badge stays non-punitive once earned.
+- **Icons**: user-provided SVG/PNG, not generated — see `assets/badges/README.md` for the `level-<n>.{svg,png}` / `<badge-id>.{svg,png}` naming convention. Missing icons fall back to a built-in emoji (`resolveAchievementIcon()` in achievements.js), so both the Dashboard grid and the widget work unchanged with zero assets present.
+- **Dashboard** (`index.html`) — `buildLevel()`/`buildBadges()` render into `#levelCard`/`#badgeGrid`. Rebuilt at init and after cloud-sync merges only (same cadence as Insights/Streak/Bar chart) — not live-updated on every `stats-updated` tick.
+- **Widget** (`sticky.html`) — the current Level icon is always visible in the site-row (`#levelIcon`); the 10-badge strip (`#badgeStrip`) is collapsed by default and toggled via the 🏅 header button (`toggleBadgeStrip()`), which also **resizes the widget's actual OS window** via `window.api.setStickyExpanded()` → main.js's `set-sticky-expanded` handler (`STICKY_H_COMPACT`/`STICKY_H_EXPANDED`, 258/334px) rather than permanently reserving that space — deliberate choice so the always-on widget footprint doesn't grow. The 258/334 in sticky.html's `toggleBadgeStrip()` must stay in sync with main.js's constants. Rebuilt at init and on `stats-updated` (re-fetches full `sessions[]` via `getData()`, same "don't trust a stale cached aggregate" approach as `syncWithCloud()`).
+
 ## Cloud sync
 
 - Firebase Auth (email/password) + Firestore, loaded via CDN ES module imports directly in `index.html` (no npm package) — requires internet to load that script block; rest of the app works offline.

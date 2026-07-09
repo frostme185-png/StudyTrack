@@ -104,6 +104,28 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
 .trend-up{color:#1D9E75;font-weight:600}
 .trend-down{color:#E24B4A;font-weight:600}
 
+/* Level — non-punitive: derived from cumulative all-time hours, only ever
+   goes up. See buildLevel() / LEVELS. */
+.level-card{display:flex;align-items:center;gap:12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px}
+.level-icon{width:34px;height:34px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:19px}
+.level-icon img{width:100%;height:100%;object-fit:contain}
+.level-info{flex:1;min-width:0}
+.level-title{font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px}
+.level-bar-track{height:6px;border-radius:3px;background:var(--bg3);overflow:hidden}
+.level-bar-fill{height:100%;background:var(--sc3);border-radius:3px;transition:width .4s}
+.level-sub{font-size:10px;color:var(--text3);margin-top:4px}
+
+/* Badges — grid of milestone achievements (hours + streak), non-punitive:
+   earned badges never get revoked. Icon resolution: custom SVG/PNG under
+   assets/badges/<id>.{svg,png} if present, else a built-in emoji fallback —
+   see resolveBadgeIcon(). */
+.badge-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:10px;margin-bottom:16px}
+.badge{display:flex;flex-direction:column;align-items:center;gap:5px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 6px;text-align:center}
+.badge.locked{opacity:.4;filter:grayscale(1)}
+.badge-icon{width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:19px}
+.badge-icon img{width:100%;height:100%;object-fit:contain}
+.badge-name{font-size:9px;color:var(--text2);line-height:1.3}
+
 /* Websites tab */
 .add-row{display:flex;gap:8px;margin-bottom:14px;align-items:center}
 .add-row input{flex:1;font-size:13px;padding:7px 11px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg2);color:var(--text);outline:none}
@@ -243,6 +265,19 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
 
     <div class="sec-hd">Insights</div>
     <div class="insights-box" id="insightsBox"></div>
+
+    <div class="sec-hd">Level</div>
+    <div class="level-card" id="levelCard">
+      <div class="level-icon" id="levelIcon">🌱</div>
+      <div class="level-info">
+        <div class="level-title" id="levelTitle">–</div>
+        <div class="level-bar-track"><div class="level-bar-fill" id="levelBarFill" style="width:0%"></div></div>
+        <div class="level-sub" id="levelSub">–</div>
+      </div>
+    </div>
+
+    <div class="sec-hd">Achievements</div>
+    <div class="badge-grid" id="badgeGrid"></div>
   </div>
 
   <!-- WEBSITES -->
@@ -428,6 +463,7 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
 
 <div id="tooltip"></div>
 
+<script src="achievements.js"></script>
 <script>
 let appData = null, settings = {}, goalH = 3
 let manualRunning = false, manualSecs = 0, manualInterval = null, manualDomain = null
@@ -453,6 +489,8 @@ async function init() {
   buildBarChart(appData.sessions || [])
   buildSiteDist(appData.sites || [], appData.sessions || [])
   buildInsights(appData.sessions || [])
+  buildLevel(appData.sessions || [])
+  buildBadges(appData.sessions || [], appData.streak || 0)
   refreshTimerSiteSelect()
   setInterval(refreshTimerSiteSelect, 10000)
   document.getElementById('timer-site-sel').addEventListener('focus', refreshTimerSiteSelect)
@@ -829,6 +867,53 @@ function buildInsights(sessions) {
     : '<span style="font-size:12px;color:var(--text3)">Chưa có đủ dữ liệu để phân tích.</span>'
 }
 
+// ── Achievements (Level + Badges) ───────────────────────────────
+// Data + computation live in achievements.js (shared with sticky.html's
+// badge strip) — this just renders them into the Dashboard's DOM.
+async function buildLevel(sessions) {
+  const card = document.getElementById('levelCard')
+  if (!card) return
+  const hours = sessions.reduce((a, s) => a + s.seconds, 0) / 3600
+  const { current, next } = computeLevel(hours)
+
+  document.getElementById('levelTitle').textContent = `Level ${current.lvl} — ${current.title}`
+  const fill = document.getElementById('levelBarFill')
+  const sub  = document.getElementById('levelSub')
+  if (!next) {
+    fill.style.width = '100%'
+    sub.textContent = `${Math.round(hours)}h — mức cao nhất`
+  } else {
+    const pct = Math.max(0, Math.min(100, Math.round((hours - current.hours) / (next.hours - current.hours) * 100)))
+    fill.style.width = pct + '%'
+    sub.textContent = `${Math.round(hours)}h / ${next.hours}h đến Level ${next.lvl}`
+  }
+
+  const iconEl = document.getElementById('levelIcon')
+  const src = await resolveAchievementIcon(`level-${current.lvl}`)
+  iconEl.innerHTML = src ? `<img src="${src}" alt="">` : '🌱'
+}
+
+async function buildBadges(sessions, streak) {
+  const grid = document.getElementById('badgeGrid')
+  if (!grid) return
+  const states = computeBadgeStates(sessions, streak, goalH * 3600)
+
+  grid.innerHTML = states.map(b => {
+    const fallback = BADGE_FALLBACK_EMOJI[b.kind] || '🏅'
+    return `<div class="badge ${b.earned ? '' : 'locked'}" title="${escapeHtml(b.label)}">
+      <div class="badge-icon" id="badge-icon-${b.id}">${fallback}</div>
+      <div class="badge-name">${escapeHtml(b.label)}</div>
+    </div>`
+  }).join('')
+
+  states.forEach(async b => {
+    const src = await resolveAchievementIcon(b.id)
+    if (!src) return
+    const el = document.getElementById(`badge-icon-${b.id}`)
+    if (el) el.innerHTML = `<img src="${src}" alt="">`
+  })
+}
+
 // ── Manual timer ──────────────────────────────────────────────
 // Dropdown lists currently-open browser tabs/windows that are NOT already
 // covered by an auto-tracked site (those track themselves automatically).
@@ -1118,6 +1203,8 @@ async function syncWithCloud(uid) {
     buildBarChart(mergedSessions)
     buildSiteDist(mergedSites, mergedSessions)
     buildInsights(mergedSessions)
+    buildLevel(mergedSessions)
+    buildBadges(mergedSessions, appData.streak || 0)
     if (document.getElementById('view-sites').classList.contains('active')) renderSiteCards(mergedSites, mergedSessions)
 
     const lbl = document.getElementById('acc-sync-lbl')

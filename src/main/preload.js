@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('api', {
   openMain:    () => ipcRenderer.send('open-main'),
   stickyDragStart: () => ipcRenderer.send('sticky-drag-start'),
   stickyDragEnd:   () => ipcRenderer.send('sticky-drag-end'),
+  setStickyExpanded: (expanded) => ipcRenderer.send('set-sticky-expanded', expanded),
 
   on:  (ch, fn) => {
     const ok = ['active-window','auto-track-update','stats-updated','settings-updated','idle-state','tracking-method']
