@@ -12,7 +12,7 @@ No framework, no bundler, no TypeScript — plain HTML/CSS/JS in the renderer, p
 
 - `src/main/main.js` — single file containing everything in the main process: data load/save, the 1s auto-track polling loop, native helper compilation, IPC handlers, tray, sticky widget lifecycle, daily reminder notifications, auto-updater.
 - `src/main/preload.js` — contextBridge API exposed to renderers as `window.api`.
-- `src/renderer/index.html` — main window: Dashboard / Websites / Debug / Settings / Account tabs, all in one file (inline `<style>` + `<script>`).
+- `src/renderer/index.html` — main window: Dashboard / Tracking / Settings / Account tabs, all in one file (inline `<style>` + `<script>`). Debug isn't a top-level tab — it's opened from Settings → Advanced.
 - `src/renderer/sticky.html` — floating widget (progress ring, mascot emoji, 4 themes).
 - `src/renderer/firebase-config.js` — **gitignored**, contains real Firebase API key. Copy from `firebase-config.example.js` and fill in your own project to get login/sync working. Without it, everything except the Account tab works fine.
 
@@ -22,7 +22,7 @@ No framework, no bundler, no TypeScript — plain HTML/CSS/JS in the renderer, p
 ```
 {
   sites: [{ name, color, domain, kind?, process? }],
-  sessions: [{ domain, seconds, manual, date, device }],
+  sessions: [{ domain, seconds, manual, date, device, hours? }],
   settings: { goalHours, autoTrack, idlePause, notifications, reminderHour,
               streakColor, showSticky, widgetTheme, startOnBoot, deviceId, ... }
 }
@@ -30,6 +30,7 @@ No framework, no bundler, no TypeScript — plain HTML/CSS/JS in the renderer, p
 
 - **`domain`** is the universal tracking key for both websites and apps — an app entry stores `domain: "app:<process>"` so every existing piece of code keyed on `domain` (sessions, breakdown, sync merge) works for apps with zero extra plumbing. Real field for matching an app is `process` (exe name without `.exe`); `kind: 'app'` distinguishes it from a website entry.
 - **`device`** = a per-install UUID (`settings.deviceId`). Used so cloud-sync merges never let one device's row get overwritten by another device's stale snapshot — see "Cloud sync" below.
+- **`hours`** = optional `{hourOfDay: seconds}` map feeding the dashboard's Focus Heatmap. Recorded at capture time (auto-track buckets each tick by current hour via `liveHours`; the manual timer walks its duration backwards from stop-time in `hoursSpread()`) because a day-level total can't be split back into hours later. Rows from before this field existed just lack it — the heatmap skips them rather than guessing a distribution. No field-level sync merge needed: `hours` rides along whole session rows, and each device is authoritative for its own rows.
 
 ## Tracking mechanics (the part most likely to break)
 
@@ -67,6 +68,8 @@ Data + pure computation live in `src/renderer/achievements.js` — a plain `<scr
 - Firebase Auth (email/password) + Firestore, loaded via CDN ES module imports directly in `index.html` (no npm package) — requires internet to load that script block; rest of the app works offline.
 - Merge logic lives in two halves: renderer (`syncWithCloud()`) computes a dedup-union by `domain|date|manual|device`; main process (`apply-synced-data` handler) only ever *adopts* rows from **other** devices — it never lets a sync overwrite this device's own rows, because the renderer's snapshot can be stale by the time the Firestore round-trip finishes. Don't "simplify" this back to a blind overwrite — it was the cause of a visible time-jumping-backward bug.
 - `syncWithCloud()` always re-fetches fresh data via `window.api.getData()` right before merging — don't let it merge from a cached renderer-side `appData` variable.
+- **Site removal uses tombstones (`appData.deletedSites: [{domain, deletedAt}]`), not a plain delete.** `mergeSites()` in index.html is a pure union and has no concept of "removed" — without a tombstone, removing a site locally only lasted until the next `autoSyncInterval` tick (≤30s), because Firestore still had the old copy and the union merged it right back in. `remove-site` in main.js now records a tombstone; `mergeDeletedSites()` unions tombstones (keeping the newest `deletedAt` per domain) and the result is used to filter `mergedSites` before it's pushed to Firestore and applied locally. `add-site`/`update-site` clear a domain's tombstone (re-adding means the user wants it tracked again). Don't go back to a bare `sites.filter()` removal without the tombstone — it'll silently resurrect on the next sync.
+- **Same tombstone pattern applies to individual sessions** (`appData.deletedSessions: [{key, deletedAt}]`, `key` = `sessionKey()` = `domain|date|manual|device`). Confirmed by reproducing it: manually deleting old/test rows straight out of `data.json` got pulled right back in on the next app launch because `mergeSessions()` is also a plain union and Firestore still had them. `mergeDeletedSessions()` mirrors `mergeDeletedSites()` and filters `mergedSessions` the same way before push/apply. There's no UI to delete a single session yet — if one gets added, route it through a tombstone the same way `remove-site` does, not a bare array filter.
 
 ## Build / release
 
@@ -74,6 +77,7 @@ Data + pure computation live in `src/renderer/achievements.js` — a plain `<scr
 - **Requires Windows Developer Mode enabled** (Settings → Privacy & security → For developers) — without it, `electron-builder`'s winCodeSign extraction fails on symlink creation (non-admin accounts can't create symlinks otherwise).
 - `assets/icon.ico` must exist (256×256) or the build fails outright.
 - Auto-update: `electron-updater`, checks GitHub Releases (`build.publish` in package.json points at `frostme185-png/StudyTrack`). Only active when `app.isPackaged` — never fires under `npm start`. To ship an update: bump `version` in package.json, then `npm run release` (needs `GH_TOKEN` env var) or manually upload the `dist/` artifacts to a new GitHub Release.
+- `build.publish.releaseType: "release"` is set so `npm run release` auto-publishes instead of leaving a draft — electron-builder's GitHub provider defaults to `draft: true`, and `electron-updater` ignores draft/prerelease releases entirely, so a forgotten unpublished draft silently breaks auto-update for every other device until someone notices and clicks Publish on GitHub manually.
 - `requestedExecutionLevel: requireAdministrator` is intentional — reading other processes' window titles needs it.
 
 ## Known environment quirks (not code bugs)

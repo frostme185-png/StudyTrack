@@ -1,6 +1,6 @@
 {
   "name": "studytrack",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "Study habit tracker with streak calendar and auto-tracking",
   "main": "src/main/main.js",
   "scripts": {
@@ -14,7 +14,8 @@
     "publish": {
       "provider": "github",
       "owner": "frostme185-png",
-      "repo": "StudyTrack"
+      "repo": "StudyTrack",
+      "releaseType": "release"
     },
     "win": {
       "target": "nsis",

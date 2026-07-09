@@ -11,12 +11,34 @@
   --border:rgba(0,0,0,0.09);--border2:rgba(0,0,0,0.18);
   --accent:#1D9E75;--red:#E24B4A;--radius:8px;
   --sc1:#9FE1CB;--sc2:#5DCAA5;--sc3:#1D9E75;--sc4:#0F6E56;
+  --glass-bg:rgba(255,255,255,.55);--glass-border:rgba(255,255,255,.6);
 }
 @media(prefers-color-scheme:dark){:root{
   --bg:#1c1c1e;--bg2:#2c2c2e;--bg3:#3a3a3c;
   --text:#f0f0f0;--text2:#aaa;--text3:#666;
   --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.15);
+  --glass-bg:rgba(255,255,255,.07);--glass-border:rgba(255,255,255,.14);
 }}
+/* ── Dashboard "Glass" theme (Settings → Display → Dashboard theme) ──
+   The main window isn't OS-transparent (see createMainWindow in main.js),
+   so this fakes the widget's frosted look with an accent-tinted background
+   wash behind blurred, semi-transparent cards instead of true see-through. */
+body[data-dash-theme="glass"]{
+  background:
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 55%),
+    radial-gradient(circle at 88% 100%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 55%),
+    var(--bg);
+}
+body[data-dash-theme="glass"] .stat-box,
+body[data-dash-theme="glass"] .at-card,
+body[data-dash-theme="glass"] .timer-card,
+body[data-dash-theme="glass"] .insight-row,
+body[data-dash-theme="glass"] .s-group,
+body[data-dash-theme="glass"] .site-card,
+body[data-dash-theme="glass"] .debug-panel{
+  background:var(--glass-bg);border-color:var(--glass-border);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+}
 body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;user-select:none}
 
 /* Titlebar */
@@ -31,8 +53,10 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
 
 /* Layout */
 .content{flex:1;overflow:hidden}
-.view{display:none;height:100%;overflow-y:auto;padding:18px 22px 22px}
-.view.active{display:block}
+.view{display:none;height:100%;overflow-y:auto;padding:18px 22px 22px;max-width:820px;margin:0 auto}
+.view.active{display:block;animation:viewIn .18s ease}
+@keyframes viewIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.tab,.btn,.t-btn,.goal-btn,.theme-pill,.del-btn,.clear-btn,.swatch,.wd{transition:background .15s,color .15s,border-color .15s,filter .15s}
 ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px}
 
 /* Stats */
@@ -41,6 +65,8 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
 .stat-lbl{font-size:10px;color:var(--text3);margin-bottom:4px}
 .stat-val{font-size:22px;font-weight:600;line-height:1}
 .stat-sub{font-size:10px;color:var(--text3);margin-top:3px}
+.stat-bar{height:3px;background:var(--bg3);border-radius:99px;margin-top:7px;overflow:hidden}
+.stat-bar-fill{height:100%;width:0;background:var(--accent);border-radius:99px;transition:width .4s ease}
 
 /* Auto-track card */
 .at-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px}
@@ -79,6 +105,17 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
 .s-cell:hover{outline:2px solid var(--border2)}.s-cell.empty{background:transparent;cursor:default;pointer-events:none}
 .s-cell[data-l="1"]{background:var(--sc1)}.s-cell[data-l="2"]{background:var(--sc2)}
 .s-cell[data-l="3"]{background:var(--sc3)}.s-cell[data-l="4"]{background:var(--sc4)}
+
+/* Focus heatmap */
+.hm-wrap{margin-bottom:16px;overflow-x:auto}
+.hm-grid{display:grid;grid-template-columns:30px repeat(24,13px);gap:3px;align-items:center;width:max-content}
+.hm-hour-lbl{font-size:9px;color:var(--text3);grid-column:span 3}
+.hm-day-lbl{font-size:9px;color:var(--text3);padding-right:5px;text-align:right}
+.hm-cell{width:13px;height:13px;border-radius:2px;background:var(--bg3)}
+.hm-cell:hover{outline:2px solid var(--border2)}
+.hm-cell[data-l="1"]{background:var(--sc1)}.hm-cell[data-l="2"]{background:var(--sc2)}
+.hm-cell[data-l="3"]{background:var(--sc3)}.hm-cell[data-l="4"]{background:var(--sc4)}
+.hm-empty{font-size:12px;color:var(--text3)}
 .streak-legend{display:flex;align-items:center;gap:5px;margin-top:8px}
 .sl-cell{width:11px;height:11px;border-radius:2px}
 
@@ -91,7 +128,7 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
 /* Site dist */
 .site-dist{display:flex;flex-direction:column;gap:8px;margin-bottom:4px}
 .sd-row{display:flex;align-items:center;gap:10px}
-.sd-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.sd-av{width:18px;height:18px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700}
 .sd-name{font-size:12px;color:var(--text2);width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sd-track{flex:1;height:5px;background:var(--bg3);border-radius:99px;overflow:hidden}
 .sd-bar{height:100%;border-radius:99px}
@@ -137,7 +174,7 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
 .btn:hover{background:var(--bg2)}
 .site-cards{display:flex;flex-direction:column;gap:8px}
 .site-card{display:flex;align-items:center;gap:10px;background:var(--bg2);border-radius:var(--radius);padding:11px 14px;border:1px solid var(--border)}
-.sc-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.sc-av{width:24px;height:24px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
 .sc-info{flex:1}.sc-name{font-size:13px;font-weight:500}.sc-dom{font-size:10px;color:var(--text3);margin-top:1px}
 .sc-time{font-size:11px;color:var(--text2)}
 .del-btn{border:none;background:transparent;cursor:pointer;color:var(--text3);font-size:15px;padding:3px 6px;border-radius:4px}
@@ -192,8 +229,7 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
   <div class="win-title">StudyTrack</div>
   <div class="tab-bar">
     <button class="tab active" onclick="gotoView('dash',this)">Dashboard</button>
-    <button class="tab" onclick="gotoView('sites',this)">Websites</button>
-    <button class="tab" onclick="gotoView('debug',this)">Debug</button>
+    <button class="tab" onclick="gotoView('sites',this)">Tracking</button>
     <button class="tab" onclick="gotoView('cfg',this)">Settings</button>
     <button class="tab" onclick="gotoView('account',this)">Account</button>
   </div>
@@ -213,6 +249,7 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
       <div class="stat-box">
         <div class="stat-lbl">⏱ Today</div>
         <div class="stat-val" id="s-today">–</div>
+        <div class="stat-bar"><div class="stat-bar-fill" id="s-goal-bar"></div></div>
         <div class="stat-sub" id="s-goal-sub">–</div>
       </div>
       <div class="stat-box">
@@ -237,7 +274,7 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
       <div class="at-time" id="at-time"></div>
     </div>
 
-    <div class="sec-hd">Study History · 6 months</div>
+    <div class="sec-hd">Study History · 6 Months</div>
     <div class="streak-wrap">
       <div class="streak-inner">
         <div class="streak-month-row" id="streakMonthRow"></div>
@@ -260,7 +297,10 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
     <div class="sec-hd">Last 7 Days</div>
     <div class="bar-chart" id="barChart"></div>
 
-    <div class="sec-hd">Website Breakdown · This Month</div>
+    <div class="sec-hd">Focus Heatmap · 8 Weeks</div>
+    <div class="hm-wrap" id="heatmapWrap"></div>
+
+    <div class="sec-hd">Time Breakdown · This Month</div>
     <div class="site-dist" id="siteDist"></div>
 
     <div class="sec-hd">Insights</div>
@@ -286,7 +326,7 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
     <div class="timer-card">
       <div class="timer-info">
         <div class="timer-dig" id="timer-dig">00:00:00</div>
-        <div class="timer-lbl" id="timer-lbl">Manual timer — select a site and press Start</div>
+        <div class="timer-lbl" id="timer-lbl">Manual timer — select a tab and press Start</div>
       </div>
       <div class="timer-btns">
         <select id="timer-site-sel" class="t-sel"></select>
@@ -356,12 +396,12 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
     <div style="margin-top:14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px">
       <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:10px">How to test auto-tracking</div>
       <div style="font-size:11px;color:var(--text2);line-height:1.7">
-        1. Make sure your website is added in the <b>Websites</b> tab<br>
+        1. Make sure your website/app is added in the <b>Tracking</b> tab<br>
         2. Open your browser and go to that site (e.g. coursera.com)<br>
-        3. Keep that browser window <b>focused/in front</b><br>
+        3. Keep that window <b>focused/in front</b><br>
         4. Watch <b>Active window</b> above — it should show the page title<br>
         5. <b>Matched site</b> should change from "None" to the site name<br>
-        6. Every 2 seconds the accum counter ticks up<br>
+        6. The session counter ticks up every second<br>
         7. Every 30s (or when you switch sites) data saves to disk<br><br>
         <b>⚠ Common issues:</b><br>
         • If Active window shows empty → run app as Administrator<br>
@@ -376,16 +416,22 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
     <div class="s-group">
       <div class="s-group-title">Display</div>
       <div class="s-row">
-        <div><div class="s-lbl">Floating widget (sticky)</div><div class="s-sub">Always-on-top timer overlay</div></div>
+        <div><div class="s-lbl">Floating widget</div><div class="s-sub">Always-on-top timer overlay</div></div>
         <button class="tog on" id="tog-sticky" onclick="toggleSetting('showSticky',this)"><div class="tog-th"></div></button>
       </div>
       <div class="s-row">
-        <div><div class="s-lbl">Streak color</div></div>
-        <div class="swatches">
-          <div class="swatch sel" style="background:#1D9E75" onclick="setColor('green','#9FE1CB','#5DCAA5','#1D9E75','#0F6E56',this)"></div>
-          <div class="swatch" style="background:#378ADD" onclick="setColor('blue','#B5D4F4','#85B7EB','#378ADD','#185FA5',this)"></div>
-          <div class="swatch" style="background:#D4537E" onclick="setColor('pink','#F4C0D1','#ED93B1','#D4537E','#993556',this)"></div>
-          <div class="swatch" style="background:#7F77DD" onclick="setColor('purple','#CECBF6','#AFA9EC','#7F77DD','#534AB7',this)"></div>
+        <div><div class="s-lbl">Streak color</div><div class="s-sub">Calendar & focus heatmap intensity</div></div>
+        <div class="swatches" id="streakSwatches"></div>
+      </div>
+      <div class="s-row">
+        <div><div class="s-lbl">Accent color</div><div class="s-sub">Buttons, toggles, tabs — independent of streak color</div></div>
+        <div class="swatches" id="accentSwatches"></div>
+      </div>
+      <div class="s-row">
+        <div><div class="s-lbl">Dashboard theme</div><div class="s-sub">Look of this window</div></div>
+        <div class="theme-pills" id="dashThemePills">
+          <button class="theme-pill" data-dashtheme="default" onclick="setDashTheme('default')">Default</button>
+          <button class="theme-pill" data-dashtheme="glass" onclick="setDashTheme('glass')">Glass</button>
         </div>
       </div>
       <div class="s-row">
@@ -395,13 +441,15 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
           <button class="theme-pill" data-theme="gradient" onclick="setWidgetTheme('gradient')">Gradient</button>
           <button class="theme-pill" data-theme="glass" onclick="setWidgetTheme('glass')">Glass</button>
           <button class="theme-pill" data-theme="neon" onclick="setWidgetTheme('neon')">Neon</button>
+          <button class="theme-pill" data-theme="solid" onclick="setWidgetTheme('solid')">Solid</button>
+          <button class="theme-pill" data-theme="mono" onclick="setWidgetTheme('mono')">Mono</button>
         </div>
       </div>
     </div>
     <div class="s-group">
       <div class="s-group-title">Auto-Tracking</div>
       <div class="s-row">
-        <div><div class="s-lbl">Auto-track active window</div><div class="s-sub">Count time when a tracked site is focused</div></div>
+        <div><div class="s-lbl">Auto-track active window</div><div class="s-sub">Count time when a tracked site/app is focused</div></div>
         <button class="tog on" id="tog-auto" onclick="toggleSetting('autoTrack',this)"><div class="tog-th"></div></button>
       </div>
       <div class="s-row">
@@ -420,7 +468,7 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
         </div>
       </div>
       <div class="s-row">
-        <div><div class="s-lbl">Daily reminder</div><div class="s-sub" id="reminder-sub">Notify if goal not reached by 8 PM</div></div>
+        <div><div class="s-lbl">Daily reminder</div><div class="s-sub" id="reminder-sub">Notify if goal not reached</div></div>
         <div style="display:flex;align-items:center;gap:8px">
           <select id="reminder-hour-sel" class="t-sel" style="flex:none;min-width:0" onchange="setReminderHour(this.value)"></select>
           <button class="tog on" id="tog-notif" onclick="toggleSetting('notifications',this)"><div class="tog-th"></div></button>
@@ -431,31 +479,38 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
         <button class="tog off" id="tog-boot" onclick="toggleSetting('startOnBoot',this)"><div class="tog-th"></div></button>
       </div>
     </div>
+    <div class="s-group">
+      <div class="s-group-title">Advanced</div>
+      <div class="s-row">
+        <div><div class="s-lbl">Debug panel</div><div class="s-sub">Inspect auto-tracking when something breaks</div></div>
+        <button class="btn" onclick="gotoView('debug')">Open</button>
+      </div>
+    </div>
   </div>
 
   <!-- ACCOUNT -->
   <div class="view" id="view-account">
     <div class="s-group" id="acc-logged-out">
-      <div class="s-group-title">Đăng nhập để đồng bộ giữa nhiều thiết bị</div>
+      <div class="s-group-title">Sign in to sync across devices</div>
       <div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px">
         <input id="acc-email" type="email" placeholder="Email" style="font-size:13px;padding:7px 11px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg);color:var(--text);outline:none"/>
-        <input id="acc-pass" type="password" placeholder="Mật khẩu (≥6 ký tự)" style="font-size:13px;padding:7px 11px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg);color:var(--text);outline:none"/>
+        <input id="acc-pass" type="password" placeholder="Password (≥6 characters)" style="font-size:13px;padding:7px 11px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg);color:var(--text);outline:none"/>
         <div style="display:flex;gap:8px">
-          <button class="btn" style="flex:1" onclick="window.accAuth.login()">Đăng nhập</button>
-          <button class="btn" style="flex:1" onclick="window.accAuth.signup()">Đăng ký</button>
+          <button class="btn" style="flex:1" onclick="window.accAuth.login()">Sign in</button>
+          <button class="btn" style="flex:1" onclick="window.accAuth.signup()">Sign up</button>
         </div>
         <div id="acc-msg" style="font-size:11px;color:var(--text3)"></div>
       </div>
     </div>
     <div class="s-group" id="acc-logged-in" style="display:none">
-      <div class="s-group-title">Tài khoản</div>
+      <div class="s-group-title">Account</div>
       <div class="s-row">
-        <div><div class="s-lbl" id="acc-email-lbl">–</div><div class="s-sub" id="acc-sync-lbl">Chưa đồng bộ</div></div>
-        <button class="btn" onclick="window.accAuth.logout()">Đăng xuất</button>
+        <div><div class="s-lbl" id="acc-email-lbl">–</div><div class="s-sub" id="acc-sync-lbl">Not synced yet</div></div>
+        <button class="btn" onclick="window.accAuth.logout()">Sign out</button>
       </div>
       <div class="s-row">
-        <div><div class="s-lbl">Đồng bộ dữ liệu</div><div class="s-sub">Sites + lịch sử học giữa các thiết bị</div></div>
-        <button class="btn" onclick="window.accAuth.syncNow()">⟲ Đồng bộ ngay</button>
+        <div><div class="s-lbl">Sync data</div><div class="s-sub">Sites + study history across devices</div></div>
+        <button class="btn" onclick="window.accAuth.syncNow()">⟲ Sync now</button>
       </div>
     </div>
   </div>
@@ -487,6 +542,7 @@ async function init() {
   renderStats(appData)
   buildStreak(appData.sessions || [])
   buildBarChart(appData.sessions || [])
+  buildHeatmap(appData.sessions || [])
   buildSiteDist(appData.sites || [], appData.sessions || [])
   buildInsights(appData.sessions || [])
   buildLevel(appData.sessions || [])
@@ -523,9 +579,7 @@ async function init() {
   window.api.on('stats-updated', payload => {
     const td = payload.todaySeconds || 0
     document.getElementById('s-streak').textContent = payload.streak
-    document.getElementById('s-today').textContent = secsToHM(td)
-    const pct = Math.min(100, Math.round(td / (goalH*3600) * 100))
-    document.getElementById('s-goal-sub').textContent = `goal ${goalH}h · ${pct}%`
+    setTodayStats(td)
     document.getElementById('dbg-today').textContent = secsToHM(td)
     dbgLog('save', `Session saved — today: ${secsToHM(td)}`)
   })
@@ -546,15 +600,11 @@ function updateAutoTrackUI(p) {
     detail.textContent = p.title || p.domain
     time.textContent = secsToHM(p.accumSecs)
     // update today stat live every second
-    if (p.todaySecs !== undefined) {
-      document.getElementById('s-today').textContent = secsToHM(p.todaySecs)
-      const pct = Math.min(100, Math.round(p.todaySecs / (goalH*3600) * 100))
-      document.getElementById('s-goal-sub').textContent = `goal ${goalH}h · ${pct}%`
-    }
+    if (p.todaySecs !== undefined) setTodayStats(p.todaySecs)
   } else {
     dot.className = 'at-dot'
-    status.textContent = 'Auto-track: no study site in focus'
-    detail.textContent = p.title ? `Current: ${p.title}` : 'Open a tracked website to start'
+    status.textContent = 'Auto-track: no tracked item in focus'
+    detail.textContent = p.title ? `Current: ${p.title}` : 'Open a tracked website/app to start'
     time.textContent = ''
   }
 }
@@ -591,7 +641,10 @@ function clearLog() { debugLog = []; document.getElementById('dbg-log').innerHTM
 function gotoView(id, el) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'))
   document.getElementById('view-'+id).classList.add('active')
-  if (el) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); el.classList.add('active') }
+  // el is absent when a view has no tab of its own (debug, opened from Settings)
+  // — clear every tab highlight instead of leaving a stale one lit.
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+  if (el) el.classList.add('active')
   if (id === 'sites') { renderSiteCards(appData.sites||[], appData.sessions||[]); refreshTimerSiteSelect() }
 }
 
@@ -610,13 +663,20 @@ function dateStr(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padSta
 function monthStr(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` }
 
 // ── Stats ─────────────────────────────────────────────────────
+// Single place that renders "today vs goal" (number, % text, progress bar) —
+// four event sources update it: initial load, 1s auto-track ticks,
+// stats-updated pushes from main, and manual-timer saves.
+function setTodayStats(td) {
+  document.getElementById('s-today').textContent = secsToHM(td)
+  const pct = Math.min(100, Math.round(td / (goalH*3600) * 100))
+  document.getElementById('s-goal-sub').textContent = `goal ${goalH}h · ${pct}%`
+  document.getElementById('s-goal-bar').style.width = pct + '%'
+}
+
 function renderStats(data) {
   const sessions = data.sessions||[]
   document.getElementById('s-streak').textContent = data.streak||0
-  const todaySecs = data.todaySeconds||0
-  document.getElementById('s-today').textContent = secsToHM(todaySecs)
-  const pct = Math.min(100,Math.round(todaySecs/(goalH*3600)*100))
-  document.getElementById('s-goal-sub').textContent = `goal ${goalH}h · ${pct}%`
+  setTodayStats(data.todaySeconds||0)
   const cutoff=new Date(); cutoff.setDate(cutoff.getDate()-7)
   const weekSecs=sessions.filter(s=>new Date(s.date)>=cutoff).reduce((a,s)=>a+s.seconds,0)
   document.getElementById('s-week').textContent = secsToHM(weekSecs)
@@ -723,6 +783,70 @@ function buildBarChart(sessions) {
   })
 }
 
+// ── Focus heatmap ─────────────────────────────────────────────
+// Hour-of-day × weekday over the last 8 weeks, built from the per-hour
+// buckets in session.hours. Rows recorded before hours-tracking existed
+// simply lack the field and are skipped — the heatmap only shows what was
+// actually measured, it never guesses a distribution from a day total.
+function buildHeatmap(sessions) {
+  const wrap = document.getElementById('heatmapWrap')
+  if (!wrap) return
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 55)
+  const cutStr = dateStr(cutoff)
+  const grid = Array.from({length: 7}, () => Array(24).fill(0))
+  let max = 0
+  ;(sessions || []).forEach(s => {
+    if (!s.hours || s.date < cutStr) return
+    const dow = new Date(s.date).getDay()
+    for (const h in s.hours) {
+      const hi = +h
+      if (hi < 0 || hi > 23) continue
+      grid[dow][hi] += s.hours[h]
+      if (grid[dow][hi] > max) max = grid[dow][hi]
+    }
+  })
+  if (!max) {
+    wrap.innerHTML = '<span class="hm-empty">No hourly data yet — the heatmap fills in as new sessions are recorded.</span>'
+    return
+  }
+  const WD = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']   // Monday-first rows
+  const g = document.createElement('div'); g.className = 'hm-grid'
+  g.appendChild(document.createElement('span'))   // corner spacer above day labels
+  for (let h = 0; h < 24; h += 3) {
+    const l = document.createElement('span'); l.className = 'hm-hour-lbl'; l.textContent = h
+    g.appendChild(l)
+  }
+  for (let r = 0; r < 7; r++) {
+    const dow = (r + 1) % 7   // row 0 = Monday, but grid[] is keyed by getDay() (Sunday=0)
+    const dl = document.createElement('div'); dl.className = 'hm-day-lbl'; dl.textContent = WD[r]
+    g.appendChild(dl)
+    for (let h = 0; h < 24; h++) {
+      const v = grid[dow][h]
+      const cell = document.createElement('div'); cell.className = 'hm-cell'
+      if (v > 0) {
+        cell.setAttribute('data-l', Math.max(1, Math.ceil(v / max * 4)))
+        cell.addEventListener('mouseenter', e => {
+          const tip = document.getElementById('tooltip')
+          tip.style.display = 'block'
+          tip.style.left = (e.clientX + 12) + 'px'
+          tip.style.top  = (e.clientY - 32) + 'px'
+          tip.textContent = `${WD[r]} · ${String(h).padStart(2,'0')}:00–${String((h+1)%24).padStart(2,'0')}:00 · ${secsToHM(v)}`
+        })
+        cell.addEventListener('mouseleave', () => { document.getElementById('tooltip').style.display = 'none' })
+      }
+      g.appendChild(cell)
+    }
+  }
+  wrap.innerHTML = ''
+  wrap.appendChild(g)
+  const legend = document.createElement('div'); legend.className = 'streak-legend'
+  legend.innerHTML = '<span style="font-size:9px;color:var(--text3)">Less</span>'
+    + '<div class="sl-cell" style="background:var(--bg3)"></div>'
+    + [1,2,3,4].map(l => `<div class="sl-cell" style="background:var(--sc${l})"></div>`).join('')
+    + '<span style="font-size:9px;color:var(--text3)">More</span>'
+  wrap.appendChild(legend)
+}
+
 // ── Site dist ─────────────────────────────────────────────────
 // Stable color per domain, picked by hashing the string — so a domain not in
 // the tracked `sites` list (e.g. studied once via the manual timer) still
@@ -751,7 +875,7 @@ function buildSiteDist(sites,sessions) {
   rows.forEach(site=>{
     const secs=bySite[site.domain]||0, pct=Math.round(secs/totalSecs*100)
     el.innerHTML+=`<div class="sd-row">
-      <div class="sd-dot" style="background:${site.color}"></div>
+      <div class="sd-av" style="background:${site.color}26;color:${site.color}">${escapeHtml((site.name||'?').trim().charAt(0).toUpperCase())}</div>
       <span class="sd-name">${escapeHtml(site.name)}</span>
       <div class="sd-track"><div class="sd-bar" style="width:${pct}%;background:${site.color}"></div></div>
       <span class="sd-time">${secs>0?secsToHM(secs):'–'}</span>
@@ -769,7 +893,7 @@ function buildInsights(sessions) {
   const trendEl = document.getElementById('s-week-trend')
   if (!box) return
   if (!sessions.length) {
-    box.innerHTML = '<span style="font-size:12px;color:var(--text3)">Chưa có đủ dữ liệu để phân tích.</span>'
+    box.innerHTML = '<span style="font-size:12px;color:var(--text3)">Not enough data to analyze yet.</span>'
     if (trendEl) trendEl.innerHTML = ''
     return
   }
@@ -799,18 +923,18 @@ function buildInsights(sessions) {
 
   if (trendEl) {
     trendEl.innerHTML = pct === null
-      ? (last7 > 0 ? '<span class="trend-up">▲ mới</span>' : '')
+      ? (last7 > 0 ? '<span class="trend-up">▲ new</span>' : '')
       : pct === 0 ? ''
       : pct > 0 ? `<span class="trend-up">▲ ${pct}%</span>` : `<span class="trend-down">▼ ${Math.abs(pct)}%</span>`
   }
 
   const rows = []
   if (pct !== null) {
-    if (pct > 0) rows.push({ ic:'📈', text:`Tuần này bạn học nhiều hơn tuần trước <b class="trend-up">${pct}%</b> (${secsToHM(last7)} so với ${secsToHM(prev7)}).` })
-    else if (pct < 0) rows.push({ ic:'📉', text:`Tuần này bạn học ít hơn tuần trước <b class="trend-down">${Math.abs(pct)}%</b> (${secsToHM(last7)} so với ${secsToHM(prev7)}).` })
-    else rows.push({ ic:'➖', text:`Tuần này bạn học bằng tuần trước (${secsToHM(last7)}).` })
+    if (pct > 0) rows.push({ ic:'📈', text:`You studied <b class="trend-up">${pct}%</b> more this week than last (${secsToHM(last7)} vs ${secsToHM(prev7)}).` })
+    else if (pct < 0) rows.push({ ic:'📉', text:`You studied <b class="trend-down">${Math.abs(pct)}%</b> less this week than last (${secsToHM(last7)} vs ${secsToHM(prev7)}).` })
+    else rows.push({ ic:'➖', text:`This week matches last week (${secsToHM(last7)}).` })
   } else if (last7 > 0) {
-    rows.push({ ic:'📈', text:`Bạn đã học ${secsToHM(last7)} trong 7 ngày qua.` })
+    rows.push({ ic:'📈', text:`You've studied ${secsToHM(last7)} in the last 7 days.` })
   }
 
   // Goal hit-rate — % of days in the trailing window that hit goalHours.
@@ -831,13 +955,13 @@ function buildInsights(sessions) {
     }
     if (goalWindow >= 3) {
       const hitPct = Math.round(hitDays / goalWindow * 100)
-      rows.push({ ic:'🎯', text:`Bạn đạt mục tiêu ${goalH}h vào <b>${hitDays}/${goalWindow}</b> ngày gần đây (<b>${hitPct}%</b>).` })
+      rows.push({ ic:'🎯', text:`You hit your ${goalH}h goal on <b>${hitDays}/${goalWindow}</b> recent days (<b>${hitPct}%</b>).` })
     }
   }
 
   // Best weekday — average per occurrence, not total (so a weekday that just
   // happens to have more calendar occurrences in the data doesn't win unfairly).
-  const WD = ['Chủ Nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7']
+  const WD = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
   const wdTotal = Array(7).fill(0), wdCount = Array(7).fill(0)
   Object.entries(byDate).forEach(([ds, secs]) => {
     const dow = new Date(ds).getDay()
@@ -849,7 +973,7 @@ function buildInsights(sessions) {
     const avg = wdTotal[i] / wdCount[i]
     if (avg > bestAvg) { bestAvg = avg; bestWd = i }
   }
-  if (bestWd !== -1) rows.push({ ic:'🗓️', text:`Bạn thường học nhiều nhất vào <b>${WD[bestWd]}</b> (trung bình ${secsToHM(Math.round(bestAvg))}/lần).` })
+  if (bestWd !== -1) rows.push({ ic:'🗓️', text:`You usually study the most on <b>${WD[bestWd]}</b> (avg ${secsToHM(Math.round(bestAvg))}/day).` })
 
   // Top site this month
   const thisMonth = monthStr(new Date())
@@ -859,12 +983,12 @@ function buildInsights(sessions) {
   if (monthEntries.length) {
     const totalMonth = monthEntries.reduce((a,[,v]) => a+v, 0)
     const [topDomain, topSecs] = monthEntries.reduce((a,b) => b[1]>a[1]?b:a)
-    rows.push({ ic:'🌐', text:`<b>${escapeHtml(topDomain)}</b> chiếm <b>${Math.round(topSecs/totalMonth*100)}%</b> thời gian học tháng này (${secsToHM(topSecs)}).` })
+    rows.push({ ic:'🌐', text:`<b>${escapeHtml(topDomain)}</b> makes up <b>${Math.round(topSecs/totalMonth*100)}%</b> of your study time this month (${secsToHM(topSecs)}).` })
   }
 
   box.innerHTML = rows.length
     ? rows.map(r => `<div class="insight-row"><span class="ic">${r.ic}</span><span>${r.text}</span></div>`).join('')
-    : '<span style="font-size:12px;color:var(--text3)">Chưa có đủ dữ liệu để phân tích.</span>'
+    : '<span style="font-size:12px;color:var(--text3)">Not enough data to analyze yet.</span>'
 }
 
 // ── Achievements (Level + Badges) ───────────────────────────────
@@ -949,7 +1073,7 @@ function toggleManualTimer() {
   if(!manualRunning){
     if(!sel.value){alert('Please select an open tab first!');return}
     if(currentAutoTrackedSite){
-      const ok = confirm(`Auto-track đang ghi nhận cho "${currentAutoTrackedSite}". Bạn vẫn muốn bắt đầu đếm giờ thủ công cho mục khác?`)
+      const ok = confirm(`Auto-track is currently recording "${currentAutoTrackedSite}". Start a manual timer for something else anyway?`)
       if(!ok) return
     }
     const tab = currentOpenTabs[Number(sel.value)]
@@ -977,9 +1101,7 @@ function toggleManualTimer() {
     document.getElementById('timer-lbl').textContent=`Saved ${secsToHM(saved)}`
     window.api.logSession({domain:manualDomain,seconds:saved,manual:true}).then(payload=>{
       document.getElementById('s-streak').textContent=payload.streak
-      document.getElementById('s-today').textContent=secsToHM(payload.todaySeconds)
-      const pct=Math.min(100,Math.round(payload.todaySeconds/(goalH*3600)*100))
-      document.getElementById('s-goal-sub').textContent=`goal ${goalH}h · ${pct}%`
+      setTodayStats(payload.todaySeconds)
       document.getElementById('dbg-today').textContent=secsToHM(payload.todaySeconds)
       buildBarChart(appData.sessions||[])
       dbgLog('save','Session saved — today: '+secsToHM(payload.todaySeconds))
@@ -999,7 +1121,7 @@ function renderSiteCards(sites,sessions) {
     const secs=todayBySite[s.domain]||0
     const isApp = s.kind === 'app'
     el.innerHTML+=`<div class="site-card">
-      <div class="sc-dot" style="background:${s.color}"></div>
+      <div class="sc-av" style="background:${s.color}26;color:${s.color}">${escapeHtml((s.name||'?').trim().charAt(0).toUpperCase())}</div>
       <div class="sc-info">
         <div class="sc-name">${isApp?'🖥️ ':''}${escapeHtml(s.name)}</div>
         <div class="sc-dom">${escapeHtml(isApp ? s.process : s.domain)}</div>
@@ -1009,7 +1131,7 @@ function renderSiteCards(sites,sessions) {
       <button class="del-btn" onclick="removeSite('${s.domain}')" title="Remove">✕</button>
     </div>`
   })
-  if(!sites.length) el.innerHTML='<span style="font-size:12px;color:var(--text3)">No websites yet. Add one above!</span>'
+  if(!sites.length) el.innerHTML='<span style="font-size:12px;color:var(--text3)">No websites/apps yet. Add one above!</span>'
 }
 
 let addKind = 'site'   // 'site' (website, matched by domain keyword) or 'app' (native app, matched by process name)
@@ -1099,7 +1221,36 @@ async function removeSite(domain) {
 }
 
 // ── Settings ──────────────────────────────────────────────────
-function hourLabel(h) { const ap=h<12?'AM':'PM', h12=h%12===0?12:h%12; return `${h12}:00 ${ap}` }
+// Streak color drives the 4-level calendar/heatmap intensity ramp; accent
+// color drives buttons/toggles/tabs. They used to be the same single value
+// (streakColor doubled as --accent) which meant picking e.g. blue never
+// actually changed any button on the dashboard — only the widget read
+// streakColor as its accent. Kept as two separate palettes here so accent
+// can pick just the "main" shade of a family without needing its own ramp.
+// NOTE: ACCENT_PALETTE's hex values must stay in sync with sticky.html's
+// ACCENT_COLORS — no shared module between the two renderer files.
+const STREAK_PALETTE = {
+  green:  ['#9FE1CB','#5DCAA5','#1D9E75','#0F6E56'],
+  blue:   ['#B5D4F4','#85B7EB','#378ADD','#185FA5'],
+  pink:   ['#F4C0D1','#ED93B1','#D4537E','#993556'],
+  purple: ['#CECBF6','#AFA9EC','#7F77DD','#534AB7'],
+  orange: ['#F0CEA8','#E69E4C','#C9710D','#814B0E'],
+  coral:  ['#F0B2A8','#DE6654','#B8331E','#782417'],
+  gray:   ['#CCCCCC','#999999','#6B6B6B','#474747'],
+}
+const ACCENT_PALETTE = {
+  green: '#1D9E75', blue: '#378ADD', pink: '#D4537E', purple: '#7F77DD',
+  orange: '#C9710D', coral: '#B8331E', gray: '#6B6B6B',
+}
+
+function buildSwatchRow(containerId, palette, colorOf, onPick) {
+  const el = document.getElementById(containerId)
+  el.innerHTML = Object.keys(palette).map(name =>
+    `<div class="swatch" data-name="${name}" style="background:${colorOf(name)}" onclick="${onPick}('${name}',this)"></div>`
+  ).join('')
+}
+
+function hourLabel(h) { return `${h}:00` }
 
 function buildReminderHourSelect() {
   const sel = document.getElementById('reminder-hour-sel')
@@ -1125,18 +1276,40 @@ function applySettings() {
   syncToggle('tog-notif',settings.notifications!==false)
   syncToggle('tog-boot',!!settings.startOnBoot)
   buildReminderHourSelect()
-  if(settings.streakColor){
-    const m={green:['#9FE1CB','#5DCAA5','#1D9E75','#0F6E56'],blue:['#B5D4F4','#85B7EB','#378ADD','#185FA5'],pink:['#F4C0D1','#ED93B1','#D4537E','#993556'],purple:['#CECBF6','#AFA9EC','#7F77DD','#534AB7']}
-    const c=m[settings.streakColor]; if(c) applyStreakColors(...c)
-  }
-  document.querySelectorAll('.theme-pill').forEach(p=>p.classList.toggle('sel', p.dataset.theme === (settings.widgetTheme||'minimal')))
+
+  buildSwatchRow('streakSwatches', STREAK_PALETTE, n => STREAK_PALETTE[n][2], 'setColor')
+  buildSwatchRow('accentSwatches', ACCENT_PALETTE, n => ACCENT_PALETTE[n], 'setAccent')
+  const streakName = settings.streakColor || 'green'
+  const accentName = settings.accentColor || settings.streakColor || 'green'
+  if (STREAK_PALETTE[streakName]) applyStreakColors(...STREAK_PALETTE[streakName])
+  if (ACCENT_PALETTE[accentName]) document.documentElement.style.setProperty('--accent', ACCENT_PALETTE[accentName])
+  document.querySelectorAll('#streakSwatches .swatch').forEach(s => s.classList.toggle('sel', s.dataset.name === streakName))
+  document.querySelectorAll('#accentSwatches .swatch').forEach(s => s.classList.toggle('sel', s.dataset.name === accentName))
+
+  document.querySelectorAll('#themePills .theme-pill').forEach(p=>p.classList.toggle('sel', p.dataset.theme === (settings.widgetTheme||'minimal')))
+  document.body.dataset.dashTheme = settings.dashTheme || 'default'
+  document.querySelectorAll('#dashThemePills .theme-pill').forEach(p=>p.classList.toggle('sel', p.dataset.dashtheme === (settings.dashTheme||'default')))
 }
 function syncToggle(id,val){const el=document.getElementById(id);if(!el)return;el.classList.toggle('on',val);el.classList.toggle('off',!val)}
 async function toggleSetting(key,el){el.classList.toggle('on');el.classList.toggle('off');settings[key]=el.classList.contains('on');settings.goalHours=goalH;await window.api.saveSettings(settings)}
 function adjGoal(d){goalH=Math.max(1,Math.min(12,goalH+d));document.getElementById('goalVal').textContent=goalH+'h';settings.goalHours=goalH;window.api.saveSettings(settings)}
 function applyStreakColors(c1,c2,c3,c4){const r=document.documentElement;r.style.setProperty('--sc1',c1);r.style.setProperty('--sc2',c2);r.style.setProperty('--sc3',c3);r.style.setProperty('--sc4',c4)}
-function setColor(name,c1,c2,c3,c4,sw){document.querySelectorAll('.swatch').forEach(s=>s.classList.remove('sel'));sw.classList.add('sel');applyStreakColors(c1,c2,c3,c4);settings.streakColor=name;settings.goalHours=goalH;window.api.saveSettings(settings)}
-function setWidgetTheme(theme){document.querySelectorAll('.theme-pill').forEach(p=>p.classList.toggle('sel',p.dataset.theme===theme));settings.widgetTheme=theme;settings.goalHours=goalH;window.api.saveSettings(settings)}
+function setColor(name,sw){
+  document.querySelectorAll('#streakSwatches .swatch').forEach(s=>s.classList.remove('sel')); sw.classList.add('sel')
+  applyStreakColors(...STREAK_PALETTE[name])
+  settings.streakColor=name; settings.goalHours=goalH; window.api.saveSettings(settings)
+}
+function setAccent(name,sw){
+  document.querySelectorAll('#accentSwatches .swatch').forEach(s=>s.classList.remove('sel')); sw.classList.add('sel')
+  document.documentElement.style.setProperty('--accent', ACCENT_PALETTE[name])
+  settings.accentColor=name; settings.goalHours=goalH; window.api.saveSettings(settings)
+}
+function setDashTheme(theme){
+  document.querySelectorAll('#dashThemePills .theme-pill').forEach(p=>p.classList.toggle('sel',p.dataset.dashtheme===theme))
+  document.body.dataset.dashTheme=theme
+  settings.dashTheme=theme; settings.goalHours=goalH; window.api.saveSettings(settings)
+}
+function setWidgetTheme(theme){document.querySelectorAll('#themePills .theme-pill').forEach(p=>p.classList.toggle('sel',p.dataset.theme===theme));settings.widgetTheme=theme;settings.goalHours=goalH;window.api.saveSettings(settings)}
 
 init()
 </script>
@@ -1168,9 +1341,34 @@ function mergeSessions(local, cloud) {
   ;[...(cloud || []), ...(local || [])].forEach(s => map.set(sessionKey(s), s))
   return [...map.values()]
 }
+// Same tombstone idea as mergeDeletedSites() below, but for individual session
+// rows — without this, deleting/purging a session locally only lasts until
+// the next sync, since mergeSessions() is a plain union and Firestore still
+// has the old row.
+function mergeDeletedSessions(local, cloud) {
+  const map = new Map()
+  ;[...(local || []), ...(cloud || [])].forEach(d => {
+    const existing = map.get(d.key)
+    if (!existing || d.deletedAt > existing.deletedAt) map.set(d.key, d)
+  })
+  return [...map.values()]
+}
 function mergeSites(local, cloud) {
   const map = new Map()
   ;[...(cloud || []), ...(local || [])].forEach(s => map.set(s.domain, s))
+  return [...map.values()]
+}
+// A removed site only disappears from the device that removed it — Firestore
+// still has the old copy until that device's next sync, and a plain union in
+// mergeSites() would just merge it right back in. Tombstones (domain +
+// deletedAt) travel through sync like sites/sessions do, so a removal made on
+// one device propagates and survives merges on every other device too.
+function mergeDeletedSites(local, cloud) {
+  const map = new Map()
+  ;[...(local || []), ...(cloud || [])].forEach(d => {
+    const existing = map.get(d.domain)
+    if (!existing || d.deletedAt > existing.deletedAt) map.set(d.domain, d)
+  })
   return [...map.values()]
 }
 
@@ -1188,19 +1386,33 @@ async function syncWithCloud(uid) {
     const ref = doc(db, 'users', uid)
     const snap = await getDoc(ref)
     const cloud = snap.exists() ? snap.data() : { sites: [], sessions: [] }
-    const mergedSessions = mergeSessions(fresh.sessions || [], cloud.sessions || [])
-    const mergedSites    = mergeSites(fresh.sites || [], cloud.sites || [])
+    const mergedDeletedSites    = mergeDeletedSites(fresh.deletedSites || [], cloud.deletedSites || [])
+    const deadDomains           = new Set(mergedDeletedSites.map(d => d.domain))
+    const mergedSites           = mergeSites(fresh.sites || [], cloud.sites || []).filter(s => !deadDomains.has(s.domain))
+    const mergedDeletedSessions = mergeDeletedSessions(fresh.deletedSessions || [], cloud.deletedSessions || [])
+    const deadKeys              = new Set(mergedDeletedSessions.map(d => d.key))
+    const mergedSessions        = mergeSessions(fresh.sessions || [], cloud.sessions || []).filter(s => !deadKeys.has(sessionKey(s)) && !deadDomains.has(s.domain))
 
-    await setDoc(ref, { sites: mergedSites, sessions: mergedSessions, updatedAt: Date.now() })
+    await setDoc(ref, {
+      sites: mergedSites, sessions: mergedSessions,
+      deletedSites: mergedDeletedSites, deletedSessions: mergedDeletedSessions,
+      updatedAt: Date.now(),
+    })
 
-    const stats = await window.api.applySyncedData({ sites: mergedSites, sessions: mergedSessions })
+    const stats = await window.api.applySyncedData({
+      sites: mergedSites, sessions: mergedSessions,
+      deletedSites: mergedDeletedSites, deletedSessions: mergedDeletedSessions,
+    })
     appData.sites = mergedSites
     appData.sessions = mergedSessions
+    appData.deletedSites = mergedDeletedSites
+    appData.deletedSessions = mergedDeletedSessions
     appData.todaySeconds = stats.todaySeconds
     appData.streak = stats.streak
     renderStats(appData)
     buildStreak(mergedSessions)
     buildBarChart(mergedSessions)
+    buildHeatmap(mergedSessions)
     buildSiteDist(mergedSites, mergedSessions)
     buildInsights(mergedSessions)
     buildLevel(mergedSessions)
@@ -1208,10 +1420,10 @@ async function syncWithCloud(uid) {
     if (document.getElementById('view-sites').classList.contains('active')) renderSiteCards(mergedSites, mergedSessions)
 
     const lbl = document.getElementById('acc-sync-lbl')
-    if (lbl) lbl.textContent = 'Đã đồng bộ lúc ' + new Date().toLocaleTimeString()
+    if (lbl) lbl.textContent = 'Synced at ' + new Date().toLocaleTimeString()
   } catch (e) {
     const lbl = document.getElementById('acc-sync-lbl')
-    if (lbl) lbl.textContent = 'Lỗi đồng bộ: ' + (e.message || e)
+    if (lbl) lbl.textContent = 'Sync error: ' + (e.message || e)
   } finally {
     syncing = false
   }
