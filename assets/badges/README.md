@@ -11,27 +11,27 @@ capstone rank with no sub-rank (like Valorant's Radiant above Immortal I-III):
 
 | lvl | Title | Hours | Tier material |
 |---|---|---|---|
-| 1 | Mầm I | 0 | Sắt xước (brushed iron) |
-| 2 | Mầm II | 3 | Sắt xước |
-| 3 | Mầm III | 6 | Sắt xước |
-| 4 | Mầm IV | 10 | Sắt xước |
-| 5 | Học Viên I | 15 | Đồng đánh bóng (bronze) |
-| 6 | Học Viên II | 22 | Đồng đánh bóng |
-| 7 | Học Viên III | 30 | Đồng đánh bóng |
-| 8 | Học Viên IV | 40 | Đồng đánh bóng |
-| 9 | Chuyên Cần I | 50 | Bạc bóng (silver) |
-| 10 | Chuyên Cần II | 65 | Bạc bóng |
-| 11 | Chuyên Cần III | 80 | Bạc bóng |
-| 12 | Chuyên Cần IV | 100 | Bạc bóng |
-| 13 | Tinh Anh I | 125 | Vàng (gold) |
-| 14 | Tinh Anh II | 150 | Vàng |
-| 15 | Tinh Anh III | 180 | Vàng |
-| 16 | Tinh Anh IV | 220 | Vàng |
-| 17 | Huyền Thoại I | 260 | Pha lê cầu vồng (prismatic) |
-| 18 | Huyền Thoại II | 310 | Pha lê cầu vồng |
-| 19 | Huyền Thoại III | 370 | Pha lê cầu vồng |
-| 20 | Huyền Thoại IV | 450 | Pha lê cầu vồng |
-| 21 | Vĩnh Hằng | 550 | Holographic — capstone, no sub-rank |
+| 1 | Sprout I | 0 | Brushed iron |
+| 2 | Sprout II | 3 | Brushed iron |
+| 3 | Sprout III | 6 | Brushed iron |
+| 4 | Sprout IV | 10 | Brushed iron |
+| 5 | Student I | 15 | Bronze |
+| 6 | Student II | 22 | Bronze |
+| 7 | Student III | 30 | Bronze |
+| 8 | Student IV | 40 | Bronze |
+| 9 | Diligent I | 50 | Silver |
+| 10 | Diligent II | 65 | Silver |
+| 11 | Diligent III | 80 | Silver |
+| 12 | Diligent IV | 100 | Silver |
+| 13 | Elite I | 125 | Gold |
+| 14 | Elite II | 150 | Gold |
+| 15 | Elite III | 180 | Gold |
+| 16 | Elite IV | 220 | Gold |
+| 17 | Legend I | 260 | Prismatic |
+| 18 | Legend II | 310 | Prismatic |
+| 19 | Legend III | 370 | Prismatic |
+| 20 | Legend IV | 450 | Prismatic |
+| 21 | Eternal | 550 | Holographic — capstone, no sub-rank |
 
 Example: `level-1.svg`, `level-21.png`.
 
