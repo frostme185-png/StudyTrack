@@ -22,7 +22,7 @@ contextBridge.exposeInMainWorld('api', {
   setStickyExpanded: (expanded) => ipcRenderer.send('set-sticky-expanded', expanded),
 
   on:  (ch, fn) => {
-    const ok = ['active-window','auto-track-update','stats-updated','settings-updated','idle-state','tracking-method']
+    const ok = ['active-window','auto-track-update','stats-updated','settings-updated','idle-state','tracking-method','trigger-sync']
     if (ok.includes(ch)) ipcRenderer.on(ch, (_, d) => fn(d))
   },
 })

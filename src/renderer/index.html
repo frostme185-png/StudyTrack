@@ -1442,6 +1442,11 @@ onAuthStateChanged(auth, user => {
   }
 })
 
+// Fired by main.js when the window goes from hidden (close-to-tray) back to
+// shown — covers the gap between "window was hidden long enough that the
+// 30s interval got throttled" and the next tick actually firing.
+window.api.on('trigger-sync', () => { if (auth.currentUser) syncWithCloud(auth.currentUser.uid) })
+
 window.accAuth = {
   async login() {
     setAccMsg('')

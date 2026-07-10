@@ -110,10 +110,22 @@ function createMainWindow() {
   mainWin = new BrowserWindow({
     width: 860, height: 620, minWidth: 720, minHeight: 520,
     frame: false, backgroundColor: '#1c1c1e',
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }
+    // backgroundThrottling:false — window-close only hides this window (see
+    // 'window-close' handler below), it never destroys it, so people who
+    // close-to-tray leave this renderer running hidden all day. Chromium
+    // throttles hidden-renderer timers hard by default, which was silently
+    // stalling the cloud-sync setInterval in index.html — auto-tracking kept
+    // working fine (that's all in this main process, never throttled), but
+    // the day's sessions never made it to Firestore until the window was
+    // shown again, so another device syncing in the evening saw nothing.
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: false }
   })
   mainWin.loadFile(path.join(__dirname, '../renderer/index.html'))
   mainWin.on('closed', () => { mainWin = null })
+  // Belt-and-suspenders alongside backgroundThrottling:false — sync the
+  // moment the window is shown again instead of waiting for the next 30s
+  // interval tick, so reopening the dashboard never shows stale totals.
+  mainWin.on('show', () => send(mainWin, 'trigger-sync'))
 }
 
 // Widget stays this compact by default; only grows when the badge strip is

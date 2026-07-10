@@ -1,6 +1,6 @@
 {
   "name": "studytrack",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Study habit tracker with streak calendar and auto-tracking",
   "main": "src/main/main.js",
   "scripts": {
