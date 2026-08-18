@@ -44,12 +44,14 @@ No framework, no bundler, no TypeScript — plain HTML/CSS/JS in the renderer, p
 
 Self-serve analytics built from `sessions[]` already in memory — no extra tracking. Lives in `buildInsights()` in `index.html`, rendered into `#insightsBox`.
 
-- **Trend vs last week** — anchored to the actual Monday-start calendar week (not a rolling 7-day window), comparing the same number of elapsed days on both sides so a partial current week isn't unfairly stacked against a full previous week.
+- **Trend vs last week** — anchored to the actual Monday-start calendar week (not a rolling 7-day window), comparing the same number of elapsed days on both sides so a partial current week isn't unfairly stacked against a full previous week. **`weekTotals()` is the single source of truth for this window** — both the "This Week" stat box (`renderStats()`) and this insight read from it, and `renderStats()` owns the ▲/▼ badge. They were separate before: the box summed a rolling 7 days while the arrow *inside the same box* was already calendar-week based, so the number and the percentage described different windows (the box read ~4× high). Don't reintroduce a second week calculation.
 - **Goal hit-rate** — % of days in a trailing window that hit `goalHours`; window caps at 30 days but shrinks to days-since-first-session so a new install isn't penalized for days before tracking started. Only shown once ≥3 days of history exist.
 - **Best weekday** — average seconds per occurrence (not total), so a weekday with more calendar occurrences in the data doesn't win unfairly.
 - **Top site this month** — % share of this month's total time.
 
-`sessions[]` only stores one row per `domain`+`date`+`device` (merged, see `addOrMergeSession()` in main.js) — there's no intra-day timestamp, so time-of-day or session-length insights aren't possible without a data model change.
+**Parsing a `date` key back into a `Date` must use `new Date(key + 'T00:00:00')`.** Bare `new Date("2026-08-18")` is parsed as *UTC* midnight, so anywhere behind UTC it lands on the previous local day — which silently shifts weekday attribution and displayed dates. Going the other way (Date → key) always goes through `dateStr()`, which mirrors main.js's `todayStr()`.
+
+`sessions[]` stores one row per `domain`+`date`+`device` (merged, see `addOrMergeSession()` in main.js). There's no per-session start/end timestamp, so *session-length* insights ("longest unbroken stretch") still aren't possible without a data-model change — but time-of-day **is** available via the `hours` bucket map on each row (see Data model above), which is what the Focus Heatmap uses.
 
 ## Achievements (Level + Badges)
 

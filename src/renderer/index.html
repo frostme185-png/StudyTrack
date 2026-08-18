@@ -255,7 +255,7 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
       <div class="stat-box">
         <div class="stat-lbl">📅 This Week</div>
         <div class="stat-val" id="s-week">–</div>
-        <div class="stat-sub">last 7 days <span id="s-week-trend"></span></div>
+        <div class="stat-sub"><span id="s-week-cmp">since Monday</span> <span id="s-week-trend"></span></div>
       </div>
       <div class="stat-box">
         <div class="stat-lbl">🏆 Best Day</div>
@@ -673,20 +673,56 @@ function setTodayStats(td) {
   document.getElementById('s-goal-bar').style.width = pct + '%'
 }
 
+// Single source of truth for "this week" — the Monday-start calendar week,
+// compared against the same number of elapsed days last week (Mon-Wed vs
+// Mon-Wed, so a partial current week isn't stacked against a full one).
+// Both the "This Week" stat box and the trend insight read from this: the box
+// used to sum a rolling 7 days while the ▲/▼ beside it was already calendar-
+// week based, so the number and the percentage in the same box disagreed.
+// Day keys go through dateStr() — `new Date("2026-07-10")` parses as UTC
+// midnight, which drifts the window by the timezone offset (the old rolling
+// filter compared exactly that against a local-time cutoff).
+function weekTotals(sessions) {
+  const byDate = {}
+  ;(sessions || []).forEach(s => { byDate[s.date] = (byDate[s.date] || 0) + s.seconds })
+  const today = new Date()
+  const elapsed = (today.getDay() + 6) % 7 + 1   // Mon=1 … Sun=7
+  const sumBack = (endOffset, n) => {
+    let total = 0
+    for (let i = 0; i < n; i++) {
+      const d = new Date(today); d.setDate(today.getDate() - endOffset - i)
+      total += byDate[dateStr(d)] || 0
+    }
+    return total
+  }
+  const thisWeek = sumBack(0, elapsed)
+  const lastWeek = sumBack(7, elapsed)
+  return { byDate, thisWeek, lastWeek, pct: lastWeek > 0 ? Math.round((thisWeek - lastWeek) / lastWeek * 100) : null }
+}
+
+function trendHtml(pct, thisWeek) {
+  if (pct === null) return thisWeek > 0 ? '<span class="trend-up">▲ new</span>' : ''
+  if (pct === 0) return ''
+  return pct > 0 ? `<span class="trend-up">▲ ${pct}%</span>` : `<span class="trend-down">▼ ${Math.abs(pct)}%</span>`
+}
+
 function renderStats(data) {
   const sessions = data.sessions||[]
   document.getElementById('s-streak').textContent = data.streak||0
   setTodayStats(data.todaySeconds||0)
-  const cutoff=new Date(); cutoff.setDate(cutoff.getDate()-7)
-  const weekSecs=sessions.filter(s=>new Date(s.date)>=cutoff).reduce((a,s)=>a+s.seconds,0)
-  document.getElementById('s-week').textContent = secsToHM(weekSecs)
-  const byDate={}
-  sessions.forEach(s=>{byDate[s.date]=(byDate[s.date]||0)+s.seconds})
+
+  const { byDate, thisWeek, lastWeek, pct } = weekTotals(sessions)
+  document.getElementById('s-week').textContent = secsToHM(thisWeek)
+  document.getElementById('s-week-cmp').textContent = lastWeek > 0 ? `vs ${secsToHM(lastWeek)} last week` : 'since Monday'
+  document.getElementById('s-week-trend').innerHTML = trendHtml(pct, thisWeek)
+
   const entries=Object.entries(byDate)
   if(entries.length){
     const [rd,rs]=entries.reduce((a,b)=>b[1]>a[1]?b:a)
     document.getElementById('s-record').textContent=secsToHM(rs)
-    document.getElementById('s-record-date').textContent=new Date(rd).toLocaleDateString('en-US',{month:'short',day:'numeric'})
+    // 'T00:00:00' forces local-midnight parsing — bare "YYYY-MM-DD" is UTC and
+    // renders as the previous day for anyone behind UTC.
+    document.getElementById('s-record-date').textContent=new Date(rd+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})
   }else{
     document.getElementById('s-record').textContent='–'
     document.getElementById('s-record-date').textContent='–'
@@ -890,43 +926,16 @@ function buildSiteDist(sites,sessions) {
 // from sessions[] already in memory — no extra tracking needed.
 function buildInsights(sessions) {
   const box = document.getElementById('insightsBox')
-  const trendEl = document.getElementById('s-week-trend')
   if (!box) return
   if (!sessions.length) {
     box.innerHTML = '<span style="font-size:12px;color:var(--text3)">Not enough data to analyze yet.</span>'
-    if (trendEl) trendEl.innerHTML = ''
     return
   }
 
-  const byDate = {}
-  sessions.forEach(s => { byDate[s.date] = (byDate[s.date]||0) + s.seconds })
-
+  // Same window as the "This Week" stat box — renderStats() owns the ▲/▼ badge
+  // itself, this only phrases the same numbers as a sentence.
+  const { byDate, thisWeek: last7, lastWeek: prev7, pct } = weekTotals(sessions)
   const today = new Date()
-  function sumDaysRange(endOffset, n) {
-    let sum = 0
-    for (let i = 0; i < n; i++) {
-      const d = new Date(today); d.setDate(today.getDate() - endOffset - i)
-      sum += byDate[dateStr(d)] || 0
-    }
-    return sum
-  }
-  // Anchor to the actual calendar week (Monday start), not a rolling 7-day
-  // window — otherwise "tuần này"/"tuần trước" silently meant "last 7 days"
-  // vs "the 7 days before that", which drifts from the calendar week shown
-  // elsewhere in the UI. Compare the same number of elapsed days on both
-  // sides (e.g. Mon-Wed this week vs Mon-Wed last week) so a partial current
-  // week isn't unfairly compared against a full previous week.
-  const daysElapsedThisWeek = (today.getDay() + 6) % 7 + 1
-  const last7 = sumDaysRange(0, daysElapsedThisWeek)
-  const prev7 = sumDaysRange(7, daysElapsedThisWeek)
-  const pct = prev7 > 0 ? Math.round((last7 - prev7) / prev7 * 100) : null
-
-  if (trendEl) {
-    trendEl.innerHTML = pct === null
-      ? (last7 > 0 ? '<span class="trend-up">▲ new</span>' : '')
-      : pct === 0 ? ''
-      : pct > 0 ? `<span class="trend-up">▲ ${pct}%</span>` : `<span class="trend-down">▼ ${Math.abs(pct)}%</span>`
-  }
 
   const rows = []
   if (pct !== null) {
@@ -934,7 +943,7 @@ function buildInsights(sessions) {
     else if (pct < 0) rows.push({ ic:'📉', text:`You studied <b class="trend-down">${Math.abs(pct)}%</b> less this week than last (${secsToHM(last7)} vs ${secsToHM(prev7)}).` })
     else rows.push({ ic:'➖', text:`This week matches last week (${secsToHM(last7)}).` })
   } else if (last7 > 0) {
-    rows.push({ ic:'📈', text:`You've studied ${secsToHM(last7)} in the last 7 days.` })
+    rows.push({ ic:'📈', text:`You've studied ${secsToHM(last7)} so far this week.` })
   }
 
   // Goal hit-rate — % of days in the trailing window that hit goalHours.
@@ -964,7 +973,7 @@ function buildInsights(sessions) {
   const WD = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
   const wdTotal = Array(7).fill(0), wdCount = Array(7).fill(0)
   Object.entries(byDate).forEach(([ds, secs]) => {
-    const dow = new Date(ds).getDay()
+    const dow = new Date(ds+'T00:00:00').getDay()   // local parse — see s-record-date
     wdTotal[dow] += secs; wdCount[dow]++
   })
   let bestWd = -1, bestAvg = 0
