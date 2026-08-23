@@ -102,6 +102,8 @@ function hoursSpread(seconds) {
 // ── Windows ───────────────────────────────────────────────────
 let mainWin = null, stickyWin = null, tray = null
 
+const ICON_PATH = path.join(__dirname, '../../assets/icon.ico')
+
 function send(win, channel, data) {
   try { if (win && !win.isDestroyed()) win.webContents.send(channel, data) } catch {}
 }
@@ -110,6 +112,10 @@ function createMainWindow() {
   mainWin = new BrowserWindow({
     width: 860, height: 620, minWidth: 720, minHeight: 520,
     frame: false, backgroundColor: '#1c1c1e',
+    // Packaged builds get this from the .exe's own resource (electron-builder
+    // embeds win.icon), but under `npm start` the process IS electron.exe, so
+    // without this the taskbar/alt-tab shows the default Electron logo.
+    icon: ICON_PATH,
     // backgroundThrottling:false — window-close only hides this window (see
     // 'window-close' handler below), it never destroys it, so people who
     // close-to-tray leave this renderer running hidden all day. Chromium
@@ -147,7 +153,7 @@ function createStickyWindow() {
 }
 
 function createTray() {
-  const icon = nativeImage.createFromPath(path.join(__dirname, '../../assets/icon.ico'))
+  const icon = nativeImage.createFromPath(ICON_PATH)
   tray = new Tray(icon.resize({ width: 16, height: 16 }))
   tray.setToolTip('StudyTrack')
   rebuildTrayMenu()
@@ -736,6 +742,7 @@ function checkDailyReminder() {
   const n = new Notification({
     title: 'StudyTrack — goal not reached today',
     body: `About ${remainingMin} more minutes to reach today's ${appData.settings.goalHours || 3}h goal.`,
+    icon: ICON_PATH,
   })
   n.on('click', () => { if (mainWin) { mainWin.show(); mainWin.focus() } else createMainWindow() })
   n.show()
@@ -918,6 +925,13 @@ ipcMain.on('sticky-drag-end', () => {
 
 // ── Lifecycle ─────────────────────────────────────────────────
 app.whenReady().then(() => {
+  // Must match "appId" in package.json's build config and be set before any
+  // window exists. Windows keys taskbar identity off this: without it a
+  // running window and the pinned/Start-menu shortcut are treated as two
+  // different apps (so pinning doesn't stick to the live window), and toast
+  // notifications — the daily reminder — render with a generic icon instead
+  // of ours.
+  if (process.platform === 'win32') app.setAppUserModelId('com.studytrack.app')
   createMainWindow()
   if (appData.settings.showSticky) createStickyWindow()
   createTray()
