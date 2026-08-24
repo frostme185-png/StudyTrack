@@ -352,13 +352,19 @@ body[data-titlebar="windows"] .wd-close:hover{background:#E81123;color:#fff}
   <!-- WEBSITES -->
   <div class="view" id="view-sites">
     <!-- Manual timer — for one-off sites/tabs you don't want to add to the tracked list below -->
+    <!-- Free-text label, not a picker: the timer exists for study that the
+         auto-tracker can't see at all — a PDF, a paper book, a lecture — so
+         enumerating open browser tabs (the old design) couldn't name most of
+         it. Suggestions come from local data only; nothing is scanned. -->
     <div class="timer-card">
       <div class="timer-info">
         <div class="timer-dig" id="timer-dig">00:00:00</div>
-        <div class="timer-lbl" id="timer-lbl">Manual timer — select a tab and press Start</div>
+        <div class="timer-lbl" id="timer-lbl">Manual timer — for anything auto-track can't see</div>
       </div>
       <div class="timer-btns">
-        <select id="timer-site-sel" class="t-sel"></select>
+        <input id="timer-label-in" class="t-sel" list="timerSuggest" autocomplete="off"
+               placeholder="What are you studying?" onkeydown="if(event.key==='Enter')toggleManualTimer()"/>
+        <datalist id="timerSuggest"></datalist>
         <button class="t-btn" id="timer-toggle-btn" onclick="toggleManualTimer()">▶ Start</button>
       </div>
     </div>
@@ -585,9 +591,7 @@ async function init() {
   buildInsights(appData.sessions || [])
   buildLevel(appData.sessions || [])
   buildBadges(appData.sessions || [], appData.streak || 0)
-  refreshTimerSiteSelect()
-  setInterval(refreshTimerSiteSelect, 10000)
-  document.getElementById('timer-site-sel').addEventListener('focus', refreshTimerSiteSelect)
+  refreshTimerSuggestions()
 
   setMethodLabel(appData.trackingMethod)
   window.api.on('tracking-method', setMethodLabel)
@@ -685,7 +689,7 @@ function gotoView(id, el) {
   if (el) el.classList.add('active')
   if (id === 'sites') {
     renderSiteCards(appData.sites||[], appData.sessions||[])
-    refreshTimerSiteSelect()
+    refreshTimerSuggestions()
     // Fill the running-app picker on arrival, since 'app' is the default kind
     // and setAddKind() isn't run at startup (it would scan windows too early).
     if (addKind === 'app' && !editingDomain) refreshAppPicker()
@@ -1180,47 +1184,51 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
 }
 
-let currentOpenTabs = []   // index-matched to the dropdown's option values
-
-async function refreshTimerSiteSelect() {
-  if (manualRunning) return   // don't disturb the dropdown mid-session
-  // Walking the UI Automation tree isn't free — skip it while the user isn't
-  // even looking at the Websites tab (the only view with this control).
-  if (!document.getElementById('view-sites').classList.contains('active')) return
-  const sel = document.getElementById('timer-site-sel')
-  const prevVal = sel.options[sel.selectedIndex]?.dataset.title
-  currentOpenTabs = await window.api.getOpenTabs()
-  sel.innerHTML = '<option value="">-- Select an open tab --</option>'
-  currentOpenTabs.forEach((t, i) => {
-    const label = t.domain ? `${t.title} (${t.domain})` : t.title
-    sel.innerHTML += `<option value="${i}" data-title="${escapeHtml(t.title)}">${escapeHtml(label)}</option>`
+// Suggestions are drawn purely from data already in memory — tracked items,
+// plus labels used in past manual sessions, most recently used first. No
+// process or window enumeration is involved.
+function refreshTimerSuggestions() {
+  const list = document.getElementById('timerSuggest')
+  if (!list) return
+  const lastUsed = {}
+  ;(appData.sessions || []).forEach(s => {
+    if (s.manual && (!lastUsed[s.domain] || s.date > lastUsed[s.domain])) lastUsed[s.domain] = s.date
   })
-  if (prevVal) {
-    const idx = currentOpenTabs.findIndex(t => t.title === prevVal)
-    if (idx !== -1) sel.value = idx
-  }
+  const past = Object.keys(lastUsed).sort((a, b) => lastUsed[b].localeCompare(lastUsed[a]))
+  const tracked = (appData.sites || []).map(s => s.name).filter(Boolean)
+  const seen = new Set()
+  list.innerHTML = [...past, ...tracked]
+    .filter(v => v && !seen.has(v.toLowerCase()) && seen.add(v.toLowerCase()))
+    .map(v => `<option value="${escapeHtml(v)}"></option>`).join('')
+}
+
+// Typing the name of something already tracked must log against that item's
+// real domain key, not the literal text — otherwise manual time for "Anki"
+// would land under a separate "Anki" bucket beside the auto-tracked
+// "app:anki" one, splitting the same activity across two rows everywhere.
+function resolveManualDomain(label) {
+  const t = label.trim(), lo = t.toLowerCase()
+  const hit = (appData.sites || []).find(s =>
+    (s.name || '').toLowerCase() === lo || (s.domain || '').toLowerCase() === lo)
+  return hit ? hit.domain : t
 }
 
 function toggleManualTimer() {
-  const sel=document.getElementById('timer-site-sel')
+  const input=document.getElementById('timer-label-in')
   const btn=document.getElementById('timer-toggle-btn')
   if(!manualRunning){
-    if(!sel.value){alert('Please select an open tab first!');return}
+    const label=input.value.trim()
+    if(!label){ input.focus(); return }
     if(currentAutoTrackedSite){
       const ok = confirm(`Auto-track is currently recording "${currentAutoTrackedSite}". Start a manual timer for something else anyway?`)
       if(!ok) return
     }
-    const tab = currentOpenTabs[Number(sel.value)]
-    // Use the real domain read from the browser's address bar when we have
-    // one, so the session lands in Website Breakdown under a real site
-    // instead of the raw (non-domain) tab title.
-    manualDomain = tab.domain || tab.title
-    const siteName = tab.domain || tab.title
+    manualDomain = resolveManualDomain(label)
     manualRunning=true
-    sel.disabled=true
+    input.disabled=true
     btn.textContent='⏹ Stop'; btn.className='t-btn stop'
-    document.getElementById('timer-lbl').textContent=`${siteName} · studying`
-    dbgLog('manual','Manual timer started for '+siteName)
+    document.getElementById('timer-lbl').textContent=`${label} · studying`
+    dbgLog('manual','Manual timer started for '+label)
     manualInterval=setInterval(()=>{
       manualSecs++
       document.getElementById('timer-dig').textContent=fmtSecs(manualSecs)
@@ -1228,21 +1236,35 @@ function toggleManualTimer() {
   } else {
     clearInterval(manualInterval)
     manualRunning=false
-    sel.disabled=false
+    input.disabled=false
     btn.textContent='▶ Start'; btn.className='t-btn'
     const saved=manualSecs
+    manualSecs=0
+    document.getElementById('timer-dig').textContent='00:00:00'
+    // Anything under 2s is a mis-click, and main.js drops it anyway — don't
+    // claim it was saved.
+    if (saved < 2) {
+      document.getElementById('timer-lbl').textContent='Too short to save'
+      dbgLog('manual','Manual timer stopped — too short to save')
+      return
+    }
     dbgLog('manual',`Manual timer stopped — saving ${secsToHM(saved)}`)
     document.getElementById('timer-lbl').textContent=`Saved ${secsToHM(saved)}`
     window.api.logSession({domain:manualDomain,seconds:saved,manual:true}).then(payload=>{
       document.getElementById('s-streak').textContent=payload.streak
       setTodayStats(payload.todaySeconds)
       document.getElementById('dbg-today').textContent=secsToHM(payload.todaySeconds)
-      buildBarChart(appData.sessions||[])
+      // logSession merged the row in the main process; pull the updated set
+      // back so the charts and the suggestion list reflect it right away.
+      window.api.getData().then(fresh => {
+        appData.sessions = fresh.sessions || []
+        buildBarChart(appData.sessions)
+        buildSiteDist(appData.sites||[], appData.sessions)
+        refreshTimerSuggestions()
+        renderSiteCards(appData.sites||[], appData.sessions)
+      })
       dbgLog('save','Session saved — today: '+secsToHM(payload.todaySeconds))
     })
-    manualSecs=0
-    document.getElementById('timer-dig').textContent='00:00:00'
-    refreshTimerSiteSelect()
   }
 }
 
@@ -1346,7 +1368,7 @@ async function addSite() {
   appData.sites=sites
   cancelSiteEdit()
   renderSiteCards(sites,appData.sessions||[])
-  refreshTimerSiteSelect()
+  refreshTimerSuggestions()
   buildSiteDist(sites,appData.sessions||[])
 }
 
@@ -1355,7 +1377,7 @@ async function removeSite(domain) {
   appData.sites=sites
   if (editingDomain === domain) cancelSiteEdit()
   renderSiteCards(sites,appData.sessions||[])
-  refreshTimerSiteSelect()
+  refreshTimerSuggestions()
   buildSiteDist(sites,appData.sessions||[])
 }
 

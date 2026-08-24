@@ -47,6 +47,15 @@ All live under Settings → Display and are applied by `applySettings()` in `ind
 - **Cache invalidation gotcha (already fixed once, watch for regressions):** the compiled helper is cached by content hash (`WINHELPER_HASH` in main.js) precisely because editing `WINHELPER_CS` without bumping anything used to silently keep using the stale cached `.exe` forever — this broke website auto-track for a while (title came back empty) while app-tracking partially worked by coincidence. If you touch `WINHELPER_CS` or `PS_SCRIPT`, the hash changes automatically and the cache self-invalidates — no manual step needed, but if tracking misbehaves after an edit, check `%TEMP%\studytrack_winhelper.*` first.
 - `matchSite(info)` — website entries match by domain keyword in title; app entries match by exact process name (case-insensitive). Shared keyword logic lives in `matchesByTitle()`.
 - Cross-process string passing uses `\x01` as a field separator (titles/URLs can contain `|`, so plain pipe-delimiting was unsafe). When editing the PowerShell scripts, the separator is written as `` $([char]1) `` — don't try to type a literal control character into a string edit; use `[char]1` in PowerShell or `'\x01'` in JS.
+- Only **two** PowerShell paths remain: `PS_SCRIPT` (foreground window, fallback for the native helper) and `PS_SCRIPT_APPS` (running-app list, runs only when the "Add app" picker opens). A third one used to walk the UI Automation tree to enumerate browser tabs for the manual timer — that's gone, see below.
+
+## Manual timer
+
+For study the auto-tracker cannot see at all: a PDF, a paper textbook, a lecture, time away from the machine.
+
+It takes a **free-text label**, not a picker. It previously listed open browser *tabs*, enumerated through a UI Automation walk in PowerShell refreshed on a 10s interval — which meant the one feature meant for untrackable study could only name browser tabs, and could not express "the PDF I'm reading". It went unused. Don't reintroduce window/tab scanning here; suggestions come from `refreshTimerSuggestions()` using only in-memory data (past manual labels, most-recent first, then tracked item names).
+
+**`resolveManualDomain()` must stay in the Start path.** Typing the name of something already tracked has to log against that item's real `domain` key — typing "Anki" stores `app:anki`, not the literal `"Anki"` — or manual time would accumulate in a second bucket beside the auto-tracked one and split the same activity across two rows in every breakdown, insight and chart.
 
 ## Insights (Dashboard)
 

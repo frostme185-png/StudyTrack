@@ -6,7 +6,6 @@ contextBridge.exposeInMainWorld('api', {
   addSite:      (site)   => ipcRenderer.invoke('add-site', site),
   removeSite:   (domain) => ipcRenderer.invoke('remove-site', domain),
   logSession:   (s)      => ipcRenderer.invoke('log-session', s),
-  getOpenTabs:  ()       => ipcRenderer.invoke('get-open-tabs'),
   getRunningApps: ()     => ipcRenderer.invoke('get-running-apps'),
   updateSite:   (domain, site) => ipcRenderer.invoke('update-site', { domain, site }),
   applySyncedData: (data) => ipcRenderer.invoke('apply-synced-data', data),

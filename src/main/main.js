@@ -191,10 +191,9 @@ function setStickyEnabled(enabled) {
 // the visible jitter/resets. Fix: compile a tiny native helper .exe ONCE
 // (cached in temp, reused across app launches) and just run that directly
 // each tick — no PowerShell, no compile, typically <30ms.
-// Only handles "title" (the 1s auto-track hot path). Listing every open tab
-// needs UI Automation (System.Windows.Automation), which isn't worth wiring
-// into this native exe since the tab list only refreshes every 5s anyway —
-// see PS_SCRIPT_LIST below, which handles that via PowerShell instead.
+// Only handles "title" (the 1s auto-track hot path); listing running apps for
+// the "Add app" picker stays on PowerShell (PS_SCRIPT_APPS), since it runs
+// only when that picker is opened.
 const WINHELPER_CS = `
 using System;
 using System.Text;
@@ -238,7 +237,7 @@ function findCsc() {
 }
 
 // Compiles the helper once in the background; until it's ready (or if it can't
-// be compiled), getActiveWindowTitle/getOpenBrowserTitles fall back to PowerShell.
+// be compiled), getActiveWindowInfo falls back to PowerShell.
 // A "failed" marker is cached so a machine without csc.exe doesn't retry (and
 // wait out the same failure) on every single app launch.
 // Hash of the current WINHELPER_CS source, stored alongside the compiled
@@ -322,123 +321,6 @@ function getActiveWindowInfo(callback) {
     `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${getPsFile()}"`,
     { timeout: 1200, windowsHide: true },
     (err, stdout) => callback(err ? { proc: '', title: '' } : parseProcTitle(stdout.toString()))
-  )
-}
-
-// Lists every TAB (not just the one shown in the window's title bar) across
-// all open browser windows, via UI Automation's TabItem elements — this is
-// the same accessibility tree Narrator/tab-switcher tools read. Only used
-// for the manual-timer dropdown (refreshed every 5s), so the extra latency
-// of walking the UI tree is fine — this never runs on the 1s auto-track hot path.
-// Also reads each window's address bar (an Edit control UI Automation can
-// reach the same way), so the dropdown can carry a real URL instead of just
-// the tab's display title — UI Automation only exposes the URL for the
-// SELECTED tab of a window though, so background tabs still come through
-// title-only (joined with  instead of '|' since titles/URLs may contain '|').
-const PS_SCRIPT_LIST = `
-Add-Type -AssemblyName UIAutomationClient
-Add-Type -AssemblyName UIAutomationTypes
-Add-Type @"
-using System;
-using System.Text;
-using System.Runtime.InteropServices;
-using System.Collections.Generic;
-public class WinEnum {
-  public delegate bool EnumProc(IntPtr hWnd, IntPtr lParam);
-  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr lParam);
-  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
-  [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder s, int n);
-  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
-}
-"@
-$SEP = [char]1
-$browserProcs = @('chrome','msedge','firefox','brave','opera','iexplore')
-$results = New-Object System.Collections.Generic.List[string]
-$cb = {
-  param($hWnd, $lParam)
-  if ([WinEnum]::IsWindowVisible($hWnd)) {
-    $procId = 0
-    [WinEnum]::GetWindowThreadProcessId($hWnd, [ref]$procId) | Out-Null
-    $proc = ''
-    try { $proc = (Get-Process -Id $procId -ErrorAction Stop).ProcessName } catch {}
-    if ($browserProcs -contains $proc.ToLower()) {
-      $activeUrl = ''
-      try {
-        $el = [System.Windows.Automation.AutomationElement]::FromHandle($hWnd)
-        $editCond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit)
-        $edits = $el.FindAll([System.Windows.Automation.TreeScope]::Descendants, $editCond)
-        foreach ($edit in $edits) {
-          $aid = $edit.Current.AutomationId
-          $nm  = $edit.Current.Name
-          if ($aid -match 'urlbar|omnibox|address' -or $nm -match 'address|search') {
-            try {
-              $vp = $edit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
-              $activeUrl = $vp.Current.Value
-            } catch { $activeUrl = $nm }
-            if ($activeUrl) { break }
-          }
-        }
-      } catch {}
-      $foundTab = $false
-      try {
-        $cond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::TabItem)
-        $tabs = $el.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond)
-        foreach ($tab in $tabs) {
-          $name = $tab.Current.Name
-          if ($name -and $name.Trim().Length -gt 0) {
-            $isSelected = $false
-            try {
-              $sp = $tab.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern)
-              $isSelected = $sp.Current.IsSelected
-            } catch {}
-            $url = if ($isSelected) { $activeUrl } else { '' }
-            $results.Add("$proc$SEP$name$SEP$url")
-            $foundTab = $true
-          }
-        }
-      } catch {}
-      if (-not $foundTab) {
-        $sb = New-Object System.Text.StringBuilder 512
-        [WinEnum]::GetWindowText($hWnd, $sb, 512) | Out-Null
-        $title = $sb.ToString().Trim()
-        if ($title.Length -gt 0) { $results.Add("$proc$SEP$title$SEP$activeUrl") }
-      }
-    }
-  }
-  return $true
-}
-[WinEnum]::EnumWindows($cb, [IntPtr]::Zero) | Out-Null
-$results -join "\`n"
-`.trim()
-
-let psListTempFile = null
-function getPsListFile() {
-  if (psListTempFile && fs.existsSync(psListTempFile)) return psListTempFile
-  psListTempFile = path.join(app.getPath('temp'), 'studytrack_winlist.ps1')
-  fs.writeFileSync(psListTempFile, PS_SCRIPT_LIST, 'utf8')
-  return psListTempFile
-}
-
-function parseWinList(raw) {
-  const seen = new Set()
-  const tabs = []
-  raw.split('\n').map(l => l.trim()).filter(Boolean).forEach(line => {
-    const [proc, title, url] = line.split('')
-    if (!proc || !BROWSER_PROCS.includes(proc.toLowerCase()) || !title) return
-    const key = title + '' + (url || '')
-    if (seen.has(key)) return
-    seen.add(key)
-    tabs.push({ title: title.trim(), url: (url || '').trim() })
-  })
-  return tabs
-}
-
-function getOpenBrowserTitles(callback) {
-  if (process.platform !== 'win32') return callback([])
-  exec(
-    `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${getPsListFile()}"`,
-    { timeout: 4000, windowsHide: true },
-    (err, stdout) => callback(err ? [] : parseWinList(stdout.toString()))
   )
 }
 
@@ -551,8 +433,7 @@ function tick() {
   })
 }
 
-// Website-kind entries match by keyword-in-title; shared by matchSite (the
-// 1s auto-track hot path) and matchSiteByTitle (the manual-timer tab list).
+// Website-kind entries match by keyword-in-title, on the 1s auto-track path.
 function matchesByTitle(site, titleLo) {
   const kw = site.domain.replace(/^www\./, '').split('.')[0].toLowerCase()
   return titleLo.includes(kw) || titleLo.includes(site.domain.toLowerCase())
@@ -570,15 +451,6 @@ function matchSite(info) {
     if (s.kind === 'app') return s.process && procLo === s.process.toLowerCase()
     return matchesByTitle(s, titleLo)
   })
-}
-
-// Title-only variant for the manual-timer's open-tabs list, which only ever
-// deals with browser tabs (no process info available per-tab) — only checks
-// website-kind entries since app-kind ones can't be matched from a tab title.
-function matchSiteByTitle(title) {
-  const sites   = (appData.sites || []).filter(s => s.kind !== 'app')
-  const titleLo = (title || '').toLowerCase()
-  return sites.find(s => matchesByTitle(s, titleLo))
 }
 
 // Tolerates brief "not matched" reads (PowerShell polling lag, momentary alt-tab,
@@ -776,15 +648,6 @@ ipcMain.handle('save-settings', (_, s) => {
   if (!s.autoTrack) flushAutoSession('settings-off')
   return true
 })
-
-// Open browser tabs/windows not already covered by an auto-tracked site —
-// candidates for the manual timer's dropdown.
-ipcMain.handle('get-open-tabs', () => new Promise(resolve => {
-  getOpenBrowserTitles(tabs => resolve(
-    tabs.filter(t => !matchSiteByTitle(t.title) && !(t.url && matchSiteByTitle(t.url)))
-        .map(t => ({ title: t.title, url: t.url, domain: t.url ? normalizeDomain(t.url) : '' }))
-  ))
-}))
 
 // Running apps with a visible window — candidates for the "Add app to track"
 // picker, excluding ones already tracked (so re-adding shows as unavailable).
