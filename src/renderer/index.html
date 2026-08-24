@@ -562,6 +562,7 @@ body[data-titlebar="windows"] .wd-close:hover{background:#E81123;color:#fff}
 
 <div id="tooltip"></div>
 
+<script src="shared.js"></script>
 <script src="achievements.js"></script>
 <script>
 let appData = null, settings = {}, goalH = 3
@@ -705,14 +706,8 @@ function secsToHM(s) {
   const h=Math.floor(s/3600),m=Math.floor(s%3600/60)
   return h>0?`${h}h ${m}m`:`${m}m`
 }
-function fmtSecs(s) {
-  return [Math.floor(s/3600),Math.floor(s%3600/60),s%60].map(v=>String(v).padStart(2,'0')).join(':')
-}
 // Local calendar date — must match main.js's todayStr() exactly, or "today"
 // totals desync around the UTC day-boundary (toISOString is UTC-based).
-function todayStr() { return dateStr(new Date()) }
-function dateStr(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` }
-function monthStr(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` }
 
 // ── Stats ─────────────────────────────────────────────────────
 // Single place that renders "today vs goal" (number, % text, progress bar) —
@@ -1227,7 +1222,7 @@ function renderManualState(s) {
   manualRunning = !!s.running
   if (s.running) {
     manualSecs = s.seconds
-    document.getElementById('timer-dig').textContent = fmtSecs(s.seconds)
+    document.getElementById('timer-dig').textContent = fmtClock(s.seconds)
     if (document.activeElement !== input) input.value = s.label
     input.disabled = true
     btn.textContent = '⏹ Stop'; btn.className = 't-btn stop'
@@ -1421,8 +1416,8 @@ async function removeSite(domain) {
 // actually changed any button on the dashboard — only the widget read
 // streakColor as its accent. Kept as two separate palettes here so accent
 // can pick just the "main" shade of a family without needing its own ramp.
-// NOTE: ACCENT_PALETTE's hex values must stay in sync with sticky.html's
-// ACCENT_COLORS — no shared module between the two renderer files.
+// ACCENT_COLORS (the flat accent shades) lives in shared.js: the widget
+// reads the same setting and needs the same table.
 const STREAK_PALETTE = {
   green:  ['#9FE1CB','#5DCAA5','#1D9E75','#0F6E56'],
   blue:   ['#B5D4F4','#85B7EB','#378ADD','#185FA5'],
@@ -1431,10 +1426,6 @@ const STREAK_PALETTE = {
   orange: ['#F0CEA8','#E69E4C','#C9710D','#814B0E'],
   coral:  ['#F0B2A8','#DE6654','#B8331E','#782417'],
   gray:   ['#CCCCCC','#999999','#6B6B6B','#474747'],
-}
-const ACCENT_PALETTE = {
-  green: '#1D9E75', blue: '#378ADD', pink: '#D4537E', purple: '#7F77DD',
-  orange: '#C9710D', coral: '#B8331E', gray: '#6B6B6B',
 }
 
 function buildSwatchRow(containerId, palette, colorOf, onPick) {
@@ -1472,11 +1463,11 @@ function applySettings() {
   buildReminderHourSelect()
 
   buildSwatchRow('streakSwatches', STREAK_PALETTE, n => STREAK_PALETTE[n][2], 'setColor')
-  buildSwatchRow('accentSwatches', ACCENT_PALETTE, n => ACCENT_PALETTE[n], 'setAccent')
+  buildSwatchRow('accentSwatches', ACCENT_COLORS, n => ACCENT_COLORS[n], 'setAccent')
   const streakName = settings.streakColor || 'green'
   const accentName = settings.accentColor || settings.streakColor || 'green'
   if (STREAK_PALETTE[streakName]) applyStreakColors(...STREAK_PALETTE[streakName])
-  if (ACCENT_PALETTE[accentName]) document.documentElement.style.setProperty('--accent', ACCENT_PALETTE[accentName])
+  if (ACCENT_COLORS[accentName]) document.documentElement.style.setProperty('--accent', ACCENT_COLORS[accentName])
   document.querySelectorAll('#streakSwatches .swatch').forEach(s => s.classList.toggle('sel', s.dataset.name === streakName))
   document.querySelectorAll('#accentSwatches .swatch').forEach(s => s.classList.toggle('sel', s.dataset.name === accentName))
 
@@ -1497,7 +1488,7 @@ function setColor(name,sw){
 }
 function setAccent(name,sw){
   document.querySelectorAll('#accentSwatches .swatch').forEach(s=>s.classList.remove('sel')); sw.classList.add('sel')
-  document.documentElement.style.setProperty('--accent', ACCENT_PALETTE[name])
+  document.documentElement.style.setProperty('--accent', ACCENT_COLORS[name])
   settings.accentColor=name; settings.goalHours=goalH; window.api.saveSettings(settings)
 }
 function setDashTheme(theme){

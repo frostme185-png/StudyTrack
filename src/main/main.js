@@ -218,8 +218,6 @@ class WinHelper {
 }
 `.trim()
 
-const BROWSER_PROCS = ['chrome', 'msedge', 'firefox', 'brave', 'opera', 'iexplore']
-
 let winHelperExe   = null      // path once compiled/found, else null (fallback to PowerShell)
 let trackingMethod = 'powershell'   // 'native' | 'powershell' — surfaced in the Debug tab
 

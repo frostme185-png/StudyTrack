@@ -184,7 +184,7 @@ body.badges-open .badge-strip{max-height:96px;margin:8px 0 12px}
   </div>
 
   <!-- Collapsed by default — toggled via the 🏅 header button -->
-  <div class="badge-strip" id="badgeStrip">
+  <div class="badge-strip">
     <div class="badge-strip-hd">Badges</div>
     <div class="badge-strip-row" id="badgeStripRow"></div>
   </div>
@@ -192,6 +192,7 @@ body.badges-open .badge-strip{max-height:96px;margin:8px 0 12px}
   <button class="open-btn" onclick="window.api.openMain()">Open Dashboard</button>
 </div>
 
+<script src="shared.js"></script>
 <script src="achievements.js"></script>
 <script>
 let goalSecs      = 3 * 3600
@@ -213,22 +214,7 @@ let badgesOpen    = false
 let isTracking  = false   // true when auto-track has an active site
 
 const RING_R = 42, RING_CIRC = 2 * Math.PI * RING_R
-// Must stay in sync with index.html's ACCENT_PALETTE — no shared module
-// between the two renderer files (see CLAUDE.md).
-const ACCENT_COLORS = {
-  green: '#1D9E75', blue: '#378ADD', pink: '#D4537E', purple: '#7F77DD',
-  orange: '#C9710D', coral: '#B8331E', gray: '#6B6B6B',
-}
 
-function fmt(s) {
-  s = Math.max(0, s)
-  return [Math.floor(s/3600), Math.floor(s%3600/60), s%60]
-    .map(v => String(v).padStart(2,'0')).join(':')
-}
-function todayStr() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-}
 
 // Total seconds to show = saved + current live auto session + manual if running.
 // Manual seconds aren't in sessions[] until the timer stops, so they're added
@@ -256,8 +242,8 @@ function updateStatusRow() {
   const lbl = document.getElementById('siteLbl')
   const dot = document.getElementById('hdDot')
   if (manual.running) {
-    lbl.textContent = `✍️ ${manual.label} · ${fmt(manual.seconds)}`
-    lbl.title = manual.idleSeconds > 60 ? `Idle ${fmt(manual.idleSeconds)} of this session` : ''
+    lbl.textContent = `✍️ ${manual.label} · ${fmtClock(manual.seconds)}`
+    lbl.title = manual.idleSeconds > 60 ? `Idle ${fmtClock(manual.idleSeconds)} of this session` : ''
     dot.className = 'hd-dot manual'
     return
   }
@@ -330,7 +316,7 @@ function celebrateGoalIfNeeded(pct) {
 function refreshUI() {
   const total = totalDisplay()
   const pct = Math.min(100, Math.round(total / goalSecs * 100))
-  document.getElementById('timer').textContent  = fmt(total)
+  document.getElementById('timer').textContent  = fmtClock(total)
   document.getElementById('pctLbl').textContent = pct + '%'
   const offset = RING_CIRC * (1 - pct / 100)
   const ring = document.getElementById('ringFill')

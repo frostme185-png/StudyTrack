@@ -13,6 +13,8 @@ npm start
 
 `npm install` only needed once (~2 min, downloads Electron).
 
+Reading other processes' window titles needs administrator rights, so a plain `npm start` can show empty titles and track nothing. `start.bat` relaunches itself elevated and then runs `npm start` — use it if auto-track looks dead in development. (The installed build always runs elevated; see `requestedExecutionLevel` in `package.json`.)
+
 ### Cloud sync setup (optional, for login/multi-device sync)
 
 The Account tab needs a Firebase project config that isn't checked into git (it carries a real API key).
@@ -71,12 +73,13 @@ Installed copies auto-check GitHub Releases on launch and silently download newe
 
 ## Features
 
-- **Auto-track** — websites (by domain keyword in window title) and native apps (by process name, e.g. `claude`, `Code`) you add to the tracked list.
-- **Manual timer** — time a one-off site/tab without adding it permanently.
-- **Dashboard** — streak calendar (6 months), last-7-days chart, website/app breakdown, auto-generated insights (week-over-week trend, goal hit-rate, best weekday, top site).
-- **Level & Badges** — 21-rank level and 10 one-time badges derived from your existing hours/streak data, no extra tracking. Non-punitive: a level never drops and a badge never gets revoked. Custom icons optional (`assets/badges/`), falls back to emoji.
-- **Floating widget** — always-on-top progress ring, 6 themes (Minimal/Gradient/Glass/Neon/Solid/Mono), follows the dashboard's accent color, plus a collapsible badge strip.
-- **Cloud sync** — optional email/password login, syncs sessions across devices via Firebase (per-device merge, safe against double-counting).
+- **Auto-track** — websites (by domain keyword in window title) and native apps (by process name, e.g. `claude`, `anki`) you add to the tracked list.
+- **Manual timer** — for study the app can't observe at all: a PDF, a paper textbook, a lecture. Type what you're working on and start; suggestions come from labels you've used before and your tracked items. Typing the name of something already tracked logs against that same item rather than creating a duplicate.
+- **Dashboard** — streak calendar (6 months), last-7-days chart, focus heatmap (hour × weekday), time breakdown, and auto-generated insights: week-over-week trend, goal hit-rate, best weekday, peak focus window, month-over-month habit shift, and top item.
+- **Level & Badges** — 21-rank level and 10 one-time badges derived from your existing hours/streak data, no extra tracking. Non-punitive: a level never drops and a badge never gets revoked. Ships with a full icon set in `assets/badges/`; drop in your own art to replace it.
+- **Personalization** — separate streak and accent colours (7 each), Default/Glass dashboard theme, macOS or Windows window controls, and 6 widget themes (Minimal/Gradient/Glass/Neon/Solid/Mono).
+- **Floating widget** — always-on-top progress ring showing today against your goal, the current auto-tracked item or a running manual timer, your level icon, and a collapsible badge strip.
+- **Cloud sync** — optional email/password login, syncs sessions across devices via Firebase (per-device merge, safe against double-counting; removals propagate rather than reappearing).
 - **Daily reminder** — desktop notification at a configurable hour if today's goal isn't met.
 - **Auto-update** — checks GitHub Releases on launch, downloads silently, prompts to restart when ready.
 
@@ -86,7 +89,9 @@ Installed copies auto-check GitHub Releases on launch and silently download newe
 
 The app reads the foreground window every second via a tiny native helper (falls back to PowerShell if no C# compiler is available). A website entry matches by keyword-in-title (e.g. "coursera" matches a tab titled "Coursera | Learn X"); an app entry matches by exact process name. Sessions flush to disk every 30 seconds and on switch/idle.
 
-Idle detection: tracking pauses automatically after 5+ minutes without keyboard/mouse input.
+Idle detection: auto-tracking pauses after 5+ minutes without keyboard/mouse input.
+
+The **manual timer deliberately does not** — an hour without input is what reading a book looks like, and the app can't tell that apart from you having walked away. It keeps counting, shows the idle portion live on the widget, and offers to trim it when you stop. If it's still running after 2 hours it sends a reminder, and it's banked rather than lost if you quit or the app crashes.
 
 ---
 
@@ -110,11 +115,12 @@ StudyTrack/
 │   └── renderer/
 │       ├── index.html                 ← Main window UI (Dashboard, Tracking, Settings, Account — Debug lives inside Settings)
 │       ├── sticky.html                ← Floating widget
-│       ├── achievements.js            ← Level/Badges data + logic, shared by index.html and sticky.html
+│       ├── shared.js                  ← Date/clock helpers + accent palette, loaded by both renderers
+│       ├── achievements.js            ← Level/Badges data + logic, loaded by both renderers
 │       ├── firebase-config.example.js ← Template — copy to firebase-config.js with your own project
 │       └── firebase-config.js         ← Your real config (gitignored, not in repo)
 ├── assets/
 │   ├── icon.ico                       ← App icon (must exist before building)
-│   └── badges/                        ← Optional custom Level/Badge icons (SVG/PNG) — see badges/README.md
+│   └── badges/                        ← Level/Badge icons + generate.js that produces them
 └── package.json
 ```

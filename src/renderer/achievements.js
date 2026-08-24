@@ -82,13 +82,6 @@ function computeLevel(totalHours) {
   return { current, next }
 }
 
-// Local date formatter, kept private to this file (not the shared global
-// `dateStr` each host page defines) so achievements.js has no load-order
-// dependency on either host script.
-function _fmtDate(d) {
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-}
-
 // Any Monday-start week (from the first tracked date through today) where
 // every one of the 7 days hit goalSecs. Once true it stays true forever
 // (we're scanning all of history), keeping the badge monotonic like the rest.
@@ -103,7 +96,7 @@ function hasPerfectWeek(secsByDate, goalSecs) {
     let allHit = true
     for (let i = 0; i < 7; i++) {
       const d = new Date(cursor); d.setDate(cursor.getDate() + i)
-      if ((secsByDate[_fmtDate(d)] || 0) < goalSecs) { allHit = false; break }
+      if ((secsByDate[dateStr(d)] || 0) < goalSecs) { allHit = false; break }
     }
     if (allHit) return true
     cursor.setDate(cursor.getDate() + 7)
