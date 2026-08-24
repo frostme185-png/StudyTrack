@@ -57,6 +57,15 @@ It takes a **free-text label**, not a picker. It previously listed open browser 
 
 **`resolveManualDomain()` must stay in the Start path.** Typing the name of something already tracked has to log against that item's real `domain` key — typing "Anki" stores `app:anki`, not the literal `"Anki"` — or manual time would accumulate in a second bucket beside the auto-tracked one and split the same activity across two rows in every breakdown, insight and chart.
 
+### The clock lives in the main process
+
+`manualTimer` in main.js, not the dashboard renderer. It was renderer-only once, and that single fact caused three separate failures: it kept counting invisibly while the window sat hidden in the tray (`window-close` only hides), the widget could never show it (sticky.html had the display code but nothing ever told it a timer was running), and quitting discarded the elapsed time outright because `before-quit` flushed the auto session only. Renderers now just render `manual-update` broadcasts and call `manual-start`/`manual-stop`/`manual-state`.
+
+- **`tickManual()` runs before both early-returns in `tick()`.** Ahead of the `tickBusy` guard, or a slow window lookup (~1s on the PowerShell fallback) silently drops seconds off the timer; ahead of the idle return, because a manual session must keep counting while the machine is idle.
+- **Idle is measured but never stops the clock.** This timer exists for study the machine can't observe, where an hour without input is normal and indistinguishable from having walked away. `idleSecs` is surfaced live on the widget and offered as a trim when stopping — the person who was there decides. Don't "fix" this into an auto-stop.
+- **`stopManualTimer()` writes nothing.** It returns the elapsed/idle split; the renderer decides how much to keep and calls `log-session`. Keeps the trim decision in one place.
+- **`appData.activeManual`** persists a running timer (every 30s) purely as a crash net. On startup `recoverManualSession()` banks it as a session rather than resuming — the app wasn't running in between, so neither was the clock. It's local-only: `syncWithCloud()` sends sites/sessions/tombstones and never touches it.
+
 ## Insights (Dashboard)
 
 Self-serve analytics built from `sessions[]` already in memory — no extra tracking. Lives in `buildInsights()` in `index.html`, rendered into `#insightsBox`.

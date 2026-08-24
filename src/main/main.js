@@ -412,11 +412,97 @@ function startTracking() {
 
 let tickBusy = false
 
+// ── Manual timer ──────────────────────────────────────────────
+// Owned by the main process, not the dashboard renderer. It used to live
+// entirely in index.html, which meant it kept counting invisibly while the
+// window was hidden to the tray, the widget could never show it (sticky.html
+// had the display code but nothing ever told it a timer was running), and
+// quitting mid-session silently discarded the elapsed time — before-quit
+// flushed the auto session only.
+//
+// `idleSecs` is measured but never used to stop the clock on its own: this
+// timer exists for study the machine cannot observe — a paper book, a lecture
+// — where zero input for an hour is the normal case, indistinguishable from
+// having walked away. So it is recorded, surfaced live, and offered back at
+// stop time as a trim, leaving the call to the person who was there.
+let manualTimer = null   // { label, domain, accumSecs, idleSecs, notifiedAt }
+
+const MANUAL_IDLE_AFTER  = 300      // seconds of no input before counting a second as idle
+const MANUAL_REMIND_EVERY = 2 * 3600  // nudge this often while a timer runs
+
+function manualState() {
+  if (!manualTimer) return { running: false }
+  return {
+    running: true,
+    label: manualTimer.label,
+    seconds: manualTimer.accumSecs,
+    idleSeconds: manualTimer.idleSecs,
+  }
+}
+
+function broadcastManual() {
+  const s = manualState()
+  send(mainWin,   'manual-update', s)
+  send(stickyWin, 'manual-update', s)
+}
+
+// Persisted so a crash or a forced quit can't take the session with it —
+// cleared as soon as it's been written into sessions[].
+function persistManual() {
+  appData.activeManual = manualTimer
+    ? { label: manualTimer.label, domain: manualTimer.domain, accumSecs: manualTimer.accumSecs, idleSecs: manualTimer.idleSecs }
+    : null
+  saveData(appData)
+}
+
+function stopManualTimer() {
+  if (!manualTimer) return { seconds: 0, idleSeconds: 0 }
+  const { domain, accumSecs, idleSecs } = manualTimer
+  manualTimer = null
+  persistManual()
+  broadcastManual()
+  return { domain, seconds: accumSecs, idleSeconds: idleSecs }
+}
+
+function tickManual(systemIdleSecs) {
+  if (!manualTimer) return
+  manualTimer.accumSecs += 1
+  if (systemIdleSecs > MANUAL_IDLE_AFTER) manualTimer.idleSecs += 1
+
+  // Still-running nudge. Fires on elapsed time rather than idle time so it
+  // also catches "left it on and kept working in another app".
+  if (appData.settings.notifications && Notification.isSupported()) {
+    const due = Math.floor(manualTimer.accumSecs / MANUAL_REMIND_EVERY)
+    if (due > 0 && due !== manualTimer.notifiedAt) {
+      manualTimer.notifiedAt = due
+      const n = new Notification({
+        title: 'StudyTrack — manual timer still running',
+        body: `"${manualTimer.label}" has been timing for ${Math.floor(manualTimer.accumSecs / 3600)}h. Stop it if you're done.`,
+        icon: ICON_PATH,
+      })
+      n.on('click', () => { if (mainWin) { mainWin.show(); mainWin.focus() } else createMainWindow() })
+      n.show()
+    }
+  }
+
+  if (manualTimer.accumSecs % 30 === 0) persistManual()
+  broadcastManual()
+}
+
 function tick() {
-  if (tickBusy) return   // previous PowerShell call hasn't returned yet — skip this beat
-  // ── idle check ──
   const idleSecs = powerMonitor.getSystemIdleTime()
-  const isIdle   = appData.settings.idlePause && idleSecs > 300
+
+  // Runs before BOTH early-returns below, and that ordering is load-bearing:
+  //  - ahead of the tickBusy guard, because a slow window lookup (the
+  //    PowerShell fallback costs ~1s per call) would otherwise skip this beat
+  //    and quietly drop seconds off a hand-started timer;
+  //  - ahead of the idle return, because a manual session keeps counting while
+  //    the machine is idle — that's the paper-book case — and only books those
+  //    seconds as idle as well.
+  tickManual(idleSecs)
+
+  if (tickBusy) return   // previous PowerShell call hasn't returned yet — skip this beat
+  const isIdle = appData.settings.idlePause && idleSecs > 300
 
   if (isIdle) {
     if (autoCurrentDomain) flushAutoSession('idle')
@@ -741,6 +827,40 @@ ipcMain.handle('log-session', (_, session) => {
   return payload
 })
 
+// A timer left in data.json means the last run ended without going through
+// before-quit — a crash, a kill, a power cut. Bank the seconds rather than
+// resuming: the app wasn't running in between, so the clock wasn't either,
+// and silently restarting it would keep counting something long finished.
+function recoverManualSession() {
+  const pending = appData.activeManual
+  if (!pending) return
+  appData.activeManual = null
+  if (!(pending.accumSecs >= 2)) { saveData(appData); return }
+  addOrMergeSession(pending.domain, pending.accumSecs, true, hoursSpread(pending.accumSecs))
+  saveData(appData)
+  if (appData.settings.notifications && Notification.isSupported()) {
+    new Notification({
+      title: 'StudyTrack — recovered a manual session',
+      body: `Saved ${Math.round(pending.accumSecs / 60)}m for "${pending.label}" from a timer that was still running.`,
+      icon: ICON_PATH,
+    }).show()
+  }
+}
+
+ipcMain.handle('manual-start', (_, { label, domain }) => {
+  if (manualTimer) return manualState()   // already running — don't restart it
+  manualTimer = { label: String(label || '').trim() || 'Study', domain, accumSecs: 0, idleSecs: 0, notifiedAt: 0 }
+  persistManual()
+  broadcastManual()
+  return manualState()
+})
+
+// Returns the elapsed/idle split without writing anything — the renderer
+// decides how much to keep and calls log-session itself, so trimming idle
+// time is a choice made once, in one place.
+ipcMain.handle('manual-stop',  () => stopManualTimer())
+ipcMain.handle('manual-state', () => manualState())
+
 ipcMain.on('window-minimize', () => mainWin?.minimize())
 ipcMain.on('window-maximize', () => mainWin?.isMaximized() ? mainWin.unmaximize() : mainWin?.maximize())
 ipcMain.on('window-close',    () => mainWin?.hide())
@@ -796,6 +916,7 @@ app.whenReady().then(() => {
   // notifications — the daily reminder — render with a generic icon instead
   // of ours.
   if (process.platform === 'win32') app.setAppUserModelId('com.studytrack.app')
+  recoverManualSession()
   createMainWindow()
   if (appData.settings.showSticky) createStickyWindow()
   createTray()
@@ -809,4 +930,13 @@ app.on('activate',          () => { if (!mainWin) createMainWindow() })
 app.on('before-quit',       () => {
   if (trackInterval) clearInterval(trackInterval)
   flushAutoSession('quit')
+  // Quitting mid-session used to drop the manual timer's elapsed time on the
+  // floor — it only existed in the dashboard renderer. Bank it like the auto
+  // session, minus nothing: the trim prompt needs a user, and there isn't one
+  // at quit time.
+  const m = stopManualTimer()
+  if (m.seconds >= 2) {
+    addOrMergeSession(m.domain, m.seconds, true, hoursSpread(m.seconds))
+    saveData(appData)
+  }
 })

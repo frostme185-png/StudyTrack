@@ -6,6 +6,9 @@ contextBridge.exposeInMainWorld('api', {
   addSite:      (site)   => ipcRenderer.invoke('add-site', site),
   removeSite:   (domain) => ipcRenderer.invoke('remove-site', domain),
   logSession:   (s)      => ipcRenderer.invoke('log-session', s),
+  manualStart:  (p)      => ipcRenderer.invoke('manual-start', p),
+  manualStop:   ()       => ipcRenderer.invoke('manual-stop'),
+  manualState:  ()       => ipcRenderer.invoke('manual-state'),
   getRunningApps: ()     => ipcRenderer.invoke('get-running-apps'),
   updateSite:   (domain, site) => ipcRenderer.invoke('update-site', { domain, site }),
   applySyncedData: (data) => ipcRenderer.invoke('apply-synced-data', data),
@@ -21,7 +24,7 @@ contextBridge.exposeInMainWorld('api', {
   setStickyExpanded: (expanded) => ipcRenderer.send('set-sticky-expanded', expanded),
 
   on:  (ch, fn) => {
-    const ok = ['active-window','auto-track-update','stats-updated','settings-updated','idle-state','tracking-method','trigger-sync']
+    const ok = ['active-window','auto-track-update','stats-updated','settings-updated','idle-state','tracking-method','trigger-sync','manual-update']
     if (ok.includes(ch)) ipcRenderer.on(ch, (_, d) => fn(d))
   },
 })

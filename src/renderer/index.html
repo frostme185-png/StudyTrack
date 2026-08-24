@@ -592,6 +592,10 @@ async function init() {
   buildLevel(appData.sessions || [])
   buildBadges(appData.sessions || [], appData.streak || 0)
   refreshTimerSuggestions()
+  // A timer may already be running in the main process — started before this
+  // window opened, or while it sat hidden in the tray.
+  window.api.manualState().then(renderManualState)
+  window.api.on('manual-update', renderManualState)
 
   setMethodLabel(appData.trackingMethod)
   window.api.on('tracking-method', setMethodLabel)
@@ -1213,7 +1217,33 @@ function resolveManualDomain(label) {
   return hit ? hit.domain : t
 }
 
-function toggleManualTimer() {
+// The clock itself lives in the main process (see main.js) so it survives the
+// window being hidden and shows up on the widget; this only renders whatever
+// main broadcasts and decides what to keep when stopping.
+function renderManualState(s) {
+  const input = document.getElementById('timer-label-in')
+  const btn   = document.getElementById('timer-toggle-btn')
+  const lbl   = document.getElementById('timer-lbl')
+  manualRunning = !!s.running
+  if (s.running) {
+    manualSecs = s.seconds
+    document.getElementById('timer-dig').textContent = fmtSecs(s.seconds)
+    if (document.activeElement !== input) input.value = s.label
+    input.disabled = true
+    btn.textContent = '⏹ Stop'; btn.className = 't-btn stop'
+    // Surfacing idle live is the whole point — a forgotten timer looks
+    // exactly like reading, until you can see how much of it was idle.
+    lbl.textContent = s.idleSeconds > 60
+      ? `${s.label} · studying · idle ${secsToHM(s.idleSeconds)}`
+      : `${s.label} · studying`
+  } else {
+    manualSecs = 0
+    input.disabled = false
+    btn.textContent = '▶ Start'; btn.className = 't-btn'
+  }
+}
+
+async function toggleManualTimer() {
   const input=document.getElementById('timer-label-in')
   const btn=document.getElementById('timer-toggle-btn')
   if(!manualRunning){
@@ -1223,34 +1253,37 @@ function toggleManualTimer() {
       const ok = confirm(`Auto-track is currently recording "${currentAutoTrackedSite}". Start a manual timer for something else anyway?`)
       if(!ok) return
     }
-    manualDomain = resolveManualDomain(label)
-    manualRunning=true
-    input.disabled=true
-    btn.textContent='⏹ Stop'; btn.className='t-btn stop'
-    document.getElementById('timer-lbl').textContent=`${label} · studying`
     dbgLog('manual','Manual timer started for '+label)
-    manualInterval=setInterval(()=>{
-      manualSecs++
-      document.getElementById('timer-dig').textContent=fmtSecs(manualSecs)
-    },1000)
+    renderManualState(await window.api.manualStart({ label, domain: resolveManualDomain(label) }))
   } else {
-    clearInterval(manualInterval)
-    manualRunning=false
-    input.disabled=false
-    btn.textContent='▶ Start'; btn.className='t-btn'
-    const saved=manualSecs
-    manualSecs=0
+    btn.disabled = true
+    const { domain, seconds, idleSeconds } = await window.api.manualStop()
+    btn.disabled = false
+    renderManualState({ running:false })
     document.getElementById('timer-dig').textContent='00:00:00'
-    // Anything under 2s is a mis-click, and main.js drops it anyway — don't
-    // claim it was saved.
-    if (saved < 2) {
+    // Under 2s is a mis-click, and main.js drops it anyway — don't claim it saved.
+    if (seconds < 2) {
       document.getElementById('timer-lbl').textContent='Too short to save'
       dbgLog('manual','Manual timer stopped — too short to save')
       return
     }
-    dbgLog('manual',`Manual timer stopped — saving ${secsToHM(saved)}`)
-    document.getElementById('timer-lbl').textContent=`Saved ${secsToHM(saved)}`
-    window.api.logSession({domain:manualDomain,seconds:saved,manual:true}).then(payload=>{
+    // Offer the trim rather than applying it: only the person who was there
+    // knows whether a long idle stretch was a paper book or a forgotten timer.
+    let keep = seconds
+    if (idleSeconds > 600 && seconds - idleSeconds >= 0) {
+      const active = seconds - idleSeconds
+      keep = confirm(
+        `Timer ran ${secsToHM(seconds)}, but ${secsToHM(idleSeconds)} of it had no keyboard or mouse activity.\n\n` +
+        `OK — save only the active ${secsToHM(active)}\nCancel — save the full ${secsToHM(seconds)}`
+      ) ? active : seconds
+    }
+    if (keep < 2) {
+      document.getElementById('timer-lbl').textContent='Nothing left to save after trimming idle'
+      return
+    }
+    dbgLog('manual',`Manual timer stopped — saving ${secsToHM(keep)}`)
+    document.getElementById('timer-lbl').textContent=`Saved ${secsToHM(keep)}`
+    window.api.logSession({domain,seconds:keep,manual:true}).then(payload=>{
       document.getElementById('s-streak').textContent=payload.streak
       setTodayStats(payload.todaySeconds)
       document.getElementById('dbg-today').textContent=secsToHM(payload.todaySeconds)

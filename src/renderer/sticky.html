@@ -70,6 +70,10 @@ body[data-theme="mono"] .hd-dot.on{background:#eaeaea;box-shadow:0 0 0 2px rgba(
 .hd-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0;transition:background .3s}
 .hd-dot.on{background:var(--accent);box-shadow:0 0 0 2px rgba(29,158,117,.25);animation:dotPulse 1.6s ease-in-out infinite}
 .hd-dot.idle{background:#EF9F27}
+/* Manual timer running — deliberately a different colour from auto-track's
+   accent dot, since the whole point is noticing a timer you started by hand
+   and might forget to stop. */
+.hd-dot.manual{background:#C77DFF;box-shadow:0 0 0 2px rgba(199,125,255,.3);animation:dotPulse 1.6s ease-in-out infinite}
 @keyframes dotPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.5)}}
 .hd-title{font-size:11px;font-weight:600;color:var(--text2)}
 .hd-right{display:flex;align-items:center;gap:5px}
@@ -193,8 +197,11 @@ body.badges-open .badge-strip{max-height:96px;margin:8px 0 12px}
 let goalSecs      = 3 * 3600
 let savedSecs     = 0    // seconds already in sessions[] for today
 let liveAutoSecs  = 0    // current auto-track session (not yet saved), from main
-let manualSecs    = 0    // current manual session running in renderer
-let manualRunning = false
+// Manual-timer state, pushed from the main process — the widget never runs
+// this clock itself, so it shows a timer started before the widget existed
+// and can't drift apart from the real one.
+let manual        = { running: false, label: '', seconds: 0, idleSeconds: 0 }
+let autoLabel     = 'Waiting for activity...'   // what the auto-tracker would show
 let isIdleNow     = false
 let celebratedDate = null   // date string already celebrated with confetti, or null
 let allSessions   = []   // full sessions[], for Level icon + badge strip (achievements.js)
@@ -223,19 +230,40 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
 
-// Total seconds to show = saved + current live auto session + manual if running
+// Total seconds to show = saved + current live auto session + manual if running.
+// Manual seconds aren't in sessions[] until the timer stops, so they're added
+// here and drop out again on the stats-updated that follows the save.
 function totalDisplay() {
-  return savedSecs + liveAutoSecs + (manualRunning ? manualSecs : 0)
+  return savedSecs + liveAutoSecs + (manual.running ? manual.seconds : 0)
 }
 
 // #5 — one emoji that summarizes "what's going on" at a glance, priority:
-// goal hit > idle > actively tracking > just waiting.
+// goal hit > manual timer > idle > actively tracking > just waiting. A running
+// manual timer outranks idle: with no keyboard input for an hour the machine
+// reads as idle, but the timer is still the thing you need to see.
 function updateMascot(pct) {
   const el = document.getElementById('mascot')
   if (pct >= 100) el.textContent = '🎉'
+  else if (manual.running) el.textContent = '✍️'
   else if (isIdleNow) el.textContent = '😴'
-  else if (isTracking || manualRunning) el.textContent = '🔥'
+  else if (isTracking) el.textContent = '🔥'
   else el.textContent = '⏳'
+}
+
+// One place decides the status row, because auto-track-update fires every
+// second and would otherwise stomp the manual label right back off screen.
+function updateStatusRow() {
+  const lbl = document.getElementById('siteLbl')
+  const dot = document.getElementById('hdDot')
+  if (manual.running) {
+    lbl.textContent = `✍️ ${manual.label} · ${fmt(manual.seconds)}`
+    lbl.title = manual.idleSeconds > 60 ? `Idle ${fmt(manual.idleSeconds)} of this session` : ''
+    dot.className = 'hd-dot manual'
+    return
+  }
+  lbl.title = ''
+  lbl.textContent = autoLabel
+  dot.className = isIdleNow ? 'hd-dot idle' : isTracking ? 'hd-dot on' : 'hd-dot'
 }
 
 // Level icon (always visible) + badge strip (collapsed behind the 🏅 toggle)
@@ -312,13 +340,13 @@ function refreshUI() {
   celebrateGoalIfNeeded(pct)
 }
 
-// Called every second by setInterval — increments liveAutoSecs if tracking
+// Called every second by setInterval — increments liveAutoSecs if tracking.
+// Manual seconds are NOT counted here: the manual clock lives in the main
+// process and arrives via 'manual-update', so the widget can show a timer
+// that was started before it existed and can't drift away from the real one.
 setInterval(() => {
   if (isTracking) {
     liveAutoSecs++
-    refreshUI()
-  } else if (manualRunning) {
-    manualSecs++
     refreshUI()
   }
 }, 1000)
@@ -345,8 +373,7 @@ window.api.on('auto-track-update', p => {
     // the full accumSecs on top double-counts that part every ~30s flush —
     // that's what caused the widget to briefly dip then jump far ahead.
     liveAutoSecs = p.liveUnflushed ?? 0
-    document.getElementById('hdDot').className  = 'hd-dot on'
-    document.getElementById('siteLbl').textContent = p.siteName
+    autoLabel = p.siteName
   } else {
     if (isTracking) {
       // just left a study site — liveAutoSecs will be flushed by main
@@ -354,9 +381,15 @@ window.api.on('auto-track-update', p => {
       liveAutoSecs = 0
     }
     isTracking = false
-    document.getElementById('hdDot').className     = 'hd-dot'
-    document.getElementById('siteLbl').textContent = 'No study site in focus'
+    autoLabel = 'No study site in focus'
   }
+  updateStatusRow()
+  refreshUI()
+})
+
+window.api.on('manual-update', s => {
+  manual = { running: !!s.running, label: s.label || '', seconds: s.seconds || 0, idleSeconds: s.idleSeconds || 0 }
+  updateStatusRow()
   refreshUI()
 })
 
@@ -378,10 +411,10 @@ window.api.on('idle-state', isIdle => {
   isIdleNow = isIdle
   if (isIdle) {
     isTracking = false
-    document.getElementById('hdDot').className     = 'hd-dot idle'
-    document.getElementById('siteLbl').textContent = 'Idle — paused'
+    autoLabel = 'Idle — paused'
     liveAutoSecs = 0
   }
+  updateStatusRow()
   refreshUI()
 })
 
@@ -406,9 +439,13 @@ async function init() {
   allSessions = data.sessions || []
   currentStreak = data.streak || 0
   applyPersonalization(data.settings)
+  // A manual timer may already be running — started before this widget was
+  // shown, or carried across a widget toggle.
+  const ms = await window.api.manualState()
+  manual = { running: !!ms.running, label: ms.label || '', seconds: ms.seconds || 0, idleSeconds: ms.idleSeconds || 0 }
   refreshUI()
   refreshAchievements()
-  document.getElementById('siteLbl').textContent = 'Waiting for activity...'
+  updateStatusRow()
 }
 init()
 </script>
