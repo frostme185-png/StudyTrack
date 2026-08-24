@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Level 20">
+  <defs>
+    <linearGradient id="g20" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f0a6ff"/>
+      <stop offset=".45" stop-color="#a066f0"/>
+      <stop offset="1" stop-color="#6d3fd4"/>
+    </linearGradient><linearGradient id="s20" x1="0" y1="0" x2="1" y2="1">
+         <stop offset="0" stop-color="#fff" stop-opacity=".55"/>
+         <stop offset=".5" stop-color="#fff" stop-opacity="0"/>
+         <stop offset="1" stop-color="#fff" stop-opacity=".35"/>
+       </linearGradient>
+  </defs>
+  
+  <path d="M32 3 L57 13 V33 C57 46 45 57 32 61 C19 57 7 46 7 33 V13 Z" fill="url(#g20)" stroke="#3f2185" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M32 3 L57 13 V33 C57 46 45 57 32 61 C19 57 7 46 7 33 V13 Z" fill="url(#s20)"/>
+  <path d="M32 8 L52 16 V25 C44 20 20 20 12 25 V16 Z" fill="#fff" opacity=".18"/>
+  <g transform="translate(20 15)">
+    <path d="M2 19 L4 6 L9 12 L12 4 L15 12 L20 6 L22 19 Z" fill="#2d1660"/>
+    <rect x="3.5" y="19.5" width="17" height="3.2" rx="1.2" fill="#2d1660"/></g>
+  <circle cx="21.5" cy="49" r="2.4" fill="#ffffff" stroke="#3f2185" stroke-width=".7"/><circle cx="28.5" cy="49" r="2.4" fill="#ffffff" stroke="#3f2185" stroke-width=".7"/><circle cx="35.5" cy="49" r="2.4" fill="#ffffff" stroke="#3f2185" stroke-width=".7"/><circle cx="42.5" cy="49" r="2.4" fill="#ffffff" stroke="#3f2185" stroke-width=".7"/>
+</svg>

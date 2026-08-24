@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Multitasker">
+  <defs>
+    <linearGradient id="gmultisiteday" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#efb883"/>
+      <stop offset=".45" stop-color="#c07a3e"/>
+      <stop offset="1" stop-color="#8a4f22"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="30" r="25" fill="url(#gmultisiteday)" stroke="#5d3315" stroke-width="2.5"/>
+  <path d="M32 7 A25 25 0 0 1 55 26 A25 25 0 0 0 32 14 A25 25 0 0 0 9 26 A25 25 0 0 1 32 7 Z" fill="#fff" opacity=".22"/>
+  <g transform="translate(20 18)">
+    <circle cx="8" cy="8" r="5.4" fill="#4a2810"/>
+    <circle cx="17" cy="10" r="5.4" fill="#4a2810" opacity=".72"/>
+    <circle cx="11.5" cy="17.5" r="5.4" fill="#4a2810" opacity=".86"/></g>
+  
+</svg>

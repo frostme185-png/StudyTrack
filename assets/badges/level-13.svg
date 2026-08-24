@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Level 13">
+  <defs>
+    <linearGradient id="g13" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff3c0"/>
+      <stop offset=".45" stop-color="#eec44e"/>
+      <stop offset="1" stop-color="#c2921c"/>
+    </linearGradient>
+  </defs>
+  
+  <path d="M32 3 L57 13 V33 C57 46 45 57 32 61 C19 57 7 46 7 33 V13 Z" fill="url(#g13)" stroke="#8a6510" stroke-width="2.5" stroke-linejoin="round"/>
+  
+  <path d="M32 8 L52 16 V25 C44 20 20 20 12 25 V16 Z" fill="#fff" opacity=".18"/>
+  <g transform="translate(20 15)">
+    <path d="M12 1 L15.2 8.6 L23.4 9.3 L17.2 14.7 L19.1 22.7 L12 18.4 L4.9 22.7 L6.8 14.7 L0.6 9.3 L8.8 8.6 Z" fill="#6b4d09"/></g>
+  <circle cx="32" cy="49" r="2.4" fill="#fffbe8" stroke="#8a6510" stroke-width=".7"/>
+</svg>

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Level 12">
+  <defs>
+    <linearGradient id="g12" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f2f6fa"/>
+      <stop offset=".45" stop-color="#c8d0d9"/>
+      <stop offset="1" stop-color="#98a1ac"/>
+    </linearGradient>
+  </defs>
+  
+  <path d="M32 3 L57 13 V33 C57 46 45 57 32 61 C19 57 7 46 7 33 V13 Z" fill="url(#g12)" stroke="#6b737d" stroke-width="2.5" stroke-linejoin="round"/>
+  
+  <path d="M32 8 L52 16 V25 C44 20 20 20 12 25 V16 Z" fill="#fff" opacity=".18"/>
+  <g transform="translate(20 15)">
+    <path d="M6 2 H18 L23 9 L12 23 L1 9 Z" fill="#4c545d"/>
+    <path d="M6 2 L9 9 L12 23 L15 9 L18 2" fill="none" stroke="#fff" stroke-width="1.3" opacity=".45"/>
+    <path d="M1 9 H23" stroke="#fff" stroke-width="1.3" opacity=".45"/></g>
+  <circle cx="21.5" cy="49" r="2.4" fill="#ffffff" stroke="#6b737d" stroke-width=".7"/><circle cx="28.5" cy="49" r="2.4" fill="#ffffff" stroke="#6b737d" stroke-width=".7"/><circle cx="35.5" cy="49" r="2.4" fill="#ffffff" stroke="#6b737d" stroke-width=".7"/><circle cx="42.5" cy="49" r="2.4" fill="#ffffff" stroke="#6b737d" stroke-width=".7"/>
+</svg>

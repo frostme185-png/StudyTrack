@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Perfect Week">
+  <defs>
+    <linearGradient id="gperfectweek" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff3c0"/>
+      <stop offset=".45" stop-color="#eec44e"/>
+      <stop offset="1" stop-color="#c2921c"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="30" r="25" fill="url(#gperfectweek)" stroke="#8a6510" stroke-width="2.5"/>
+  <path d="M32 7 A25 25 0 0 1 55 26 A25 25 0 0 0 32 14 A25 25 0 0 0 9 26 A25 25 0 0 1 32 7 Z" fill="#fff" opacity=".22"/>
+  <g transform="translate(20 18)">
+    <rect x="1.5" y="3.5" width="21" height="19" rx="3" fill="none" stroke="#6b4d09" stroke-width="2.4"/>
+    <path d="M1.5 9.5 H22.5" stroke="#6b4d09" stroke-width="2.4"/>
+    <path d="M7 1 V5 M17 1 V5" stroke="#6b4d09" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M7.5 15.5 L11 19 L17 12.5" fill="none" stroke="#6b4d09" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></g>
+  
+</svg>

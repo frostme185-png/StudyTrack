@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="100 Hours Studied">
+  <defs>
+    <linearGradient id="ghours100" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff3c0"/>
+      <stop offset=".45" stop-color="#eec44e"/>
+      <stop offset="1" stop-color="#c2921c"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="30" r="25" fill="url(#ghours100)" stroke="#8a6510" stroke-width="2.5"/>
+  <path d="M32 7 A25 25 0 0 1 55 26 A25 25 0 0 0 32 14 A25 25 0 0 0 9 26 A25 25 0 0 1 32 7 Z" fill="#fff" opacity=".22"/>
+  <g transform="translate(20 18)">
+    <circle cx="12" cy="12" r="10.5" fill="none" stroke="#6b4d09" stroke-width="2.6"/>
+    <path d="M12 5.5 V12 L16.5 15" fill="none" stroke="#6b4d09" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></g>
+  <circle cx="24" cy="55" r="2.6" fill="#fffbe8" stroke="#8a6510" stroke-width=".8"/><circle cx="32" cy="55" r="2.6" fill="#fffbe8" stroke="#8a6510" stroke-width=".8"/><circle cx="40" cy="55" r="2.6" fill="#fffbe8" stroke="#8a6510" stroke-width=".8"/>
+</svg>
