@@ -24,13 +24,21 @@ No framework, no bundler, no TypeScript — plain HTML/CSS/JS in the renderer, p
   sites: [{ name, color, domain, kind?, process? }],
   sessions: [{ domain, seconds, manual, date, device, hours? }],
   settings: { goalHours, autoTrack, idlePause, notifications, reminderHour,
-              streakColor, showSticky, widgetTheme, startOnBoot, deviceId, ... }
+              streakColor, accentColor, dashTheme, titlebarStyle, showSticky,
+              widgetTheme, startOnBoot, deviceId, ... }
 }
 ```
 
 - **`domain`** is the universal tracking key for both websites and apps — an app entry stores `domain: "app:<process>"` so every existing piece of code keyed on `domain` (sessions, breakdown, sync merge) works for apps with zero extra plumbing. Real field for matching an app is `process` (exe name without `.exe`); `kind: 'app'` distinguishes it from a website entry.
 - **`device`** = a per-install UUID (`settings.deviceId`). Used so cloud-sync merges never let one device's row get overwritten by another device's stale snapshot — see "Cloud sync" below.
 - **`hours`** = optional `{hourOfDay: seconds}` map feeding the dashboard's Focus Heatmap. Recorded at capture time (auto-track buckets each tick by current hour via `liveHours`; the manual timer walks its duration backwards from stop-time in `hoursSpread()`) because a day-level total can't be split back into hours later. Rows from before this field existed just lack it — the heatmap skips them rather than guessing a distribution. No field-level sync merge needed: `hours` rides along whole session rows, and each device is authoritative for its own rows.
+
+## Personalization settings
+
+All live under Settings → Display and are applied by `applySettings()` in `index.html`, which is also what the `settings-updated` IPC event re-runs — a new option must be handled there, not just in its own setter, or it won't survive a reload.
+
+- **`streakColor`** picks the 4-step intensity ramp (`--sc1..4`) for the calendar and heatmap; **`accentColor`** independently picks `--accent` for buttons/toggles/tabs. They were one value once, which meant choosing a colour visibly changed the widget but nothing on the dashboard. `ACCENT_PALETTE` in `index.html` and `ACCENT_COLORS` in `sticky.html` must stay in sync — the two renderers share no module.
+- **`dashTheme`** (`default` | `glass`) and **`titlebarStyle`** (`mac` | `windows`) are both applied as `data-` attributes on `<body>`, with all the actual styling in CSS. The titlebar keeps **one** set of buttons wired to one set of IPC calls; the Windows style only reorders them with flex `order` and reshapes them, so don't add a second markup block for it. `mac` stays the default so existing installs don't change appearance on update.
 
 ## Tracking mechanics (the part most likely to break)
 

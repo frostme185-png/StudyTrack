@@ -44,8 +44,34 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
 /* Titlebar */
 .titlebar{height:42px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;-webkit-app-region:drag;flex-shrink:0}
 .win-dots{display:flex;gap:7px;-webkit-app-region:no-drag;margin-right:12px}
-.wd{width:12px;height:12px;border-radius:50%;cursor:pointer}.wd:hover{filter:brightness(0.82)}
+.wd{width:12px;height:12px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.wd:hover{filter:brightness(0.82)}
+.wd span{display:none}
+.wd-close{background:#E24B4A}.wd-min{background:#EF9F27}.wd-max{background:#639922}
 .win-title{font-size:12px;font-weight:500;color:var(--text2);flex:1;text-align:center}
+
+/* ── Windows titlebar style (Settings → Display → Window controls) ──
+   Same three buttons, restyled: pushed flush to the top-right corner with no
+   titlebar padding to interrupt them, reordered min/max/close, square and
+   full-height with the standard red close hover. The min/max glyphs are drawn
+   with CSS box/border rather than characters — Segoe MDL2 codepoints render
+   as tofu if the font is missing, and plain Unicode box-drawing characters
+   vary in weight between fonts. */
+body[data-titlebar="windows"] .titlebar{padding-right:0}
+body[data-titlebar="windows"] .win-dots{order:9;gap:0;margin-right:0;margin-left:10px;align-self:stretch}
+body[data-titlebar="windows"] .win-title{text-align:left}
+body[data-titlebar="windows"] .wd{
+  width:46px;height:auto;align-self:stretch;border-radius:0;background:transparent;color:var(--text2);
+}
+body[data-titlebar="windows"] .wd:hover{background:var(--bg3);color:var(--text);filter:none}
+body[data-titlebar="windows"] .wd span{display:block}
+body[data-titlebar="windows"] .wd-min{order:1}
+body[data-titlebar="windows"] .wd-max{order:2}
+body[data-titlebar="windows"] .wd-close{order:3}
+body[data-titlebar="windows"] .wd-min span{width:10px;height:1px;background:currentColor}
+body[data-titlebar="windows"] .wd-max span{width:9px;height:9px;border:1px solid currentColor}
+body[data-titlebar="windows"] .wd-close span{font-size:12px;line-height:1}
+body[data-titlebar="windows"] .wd-close:hover{background:#E81123;color:#fff}
 .tab-bar{display:flex;gap:2px;-webkit-app-region:no-drag}
 .tab{font-size:12px;padding:5px 14px;border-radius:6px;border:none;background:transparent;cursor:pointer;color:var(--text2)}
 .tab:hover{background:var(--bg3)}.tab.active{background:var(--bg);color:var(--text);font-weight:500;border:1px solid var(--border2)}
@@ -221,10 +247,13 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
 <body>
 
 <div class="titlebar">
+  <!-- DOM order is the macOS one (close, min, max); the Windows titlebar style
+       reorders these with flex `order` and reshapes them entirely in CSS, so
+       there's only ever one set of buttons wired to one set of IPC calls. -->
   <div class="win-dots">
-    <div class="wd" style="background:#E24B4A" onclick="window.api.close()" title="Close"></div>
-    <div class="wd" style="background:#EF9F27" onclick="window.api.minimize()" title="Minimize"></div>
-    <div class="wd" style="background:#639922" onclick="window.api.maximize()" title="Maximize"></div>
+    <div class="wd wd-close" onclick="window.api.close()" title="Close"><span>✕</span></div>
+    <div class="wd wd-min" onclick="window.api.minimize()" title="Minimize"><span></span></div>
+    <div class="wd wd-max" onclick="window.api.maximize()" title="Maximize"><span></span></div>
   </div>
   <div class="win-title">StudyTrack</div>
   <div class="tab-bar">
@@ -426,6 +455,13 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
       <div class="s-row">
         <div><div class="s-lbl">Accent color</div><div class="s-sub">Buttons, toggles, tabs — independent of streak color</div></div>
         <div class="swatches" id="accentSwatches"></div>
+      </div>
+      <div class="s-row">
+        <div><div class="s-lbl">Window controls</div><div class="s-sub">Style and side of the minimize/close buttons</div></div>
+        <div class="theme-pills" id="titlebarPills">
+          <button class="theme-pill" data-titlebar="mac" onclick="setTitlebarStyle('mac')">macOS</button>
+          <button class="theme-pill" data-titlebar="windows" onclick="setTitlebarStyle('windows')">Windows</button>
+        </div>
       </div>
       <div class="s-row">
         <div><div class="s-lbl">Dashboard theme</div><div class="s-sub">Look of this window</div></div>
@@ -1298,6 +1334,8 @@ function applySettings() {
   document.querySelectorAll('#themePills .theme-pill').forEach(p=>p.classList.toggle('sel', p.dataset.theme === (settings.widgetTheme||'minimal')))
   document.body.dataset.dashTheme = settings.dashTheme || 'default'
   document.querySelectorAll('#dashThemePills .theme-pill').forEach(p=>p.classList.toggle('sel', p.dataset.dashtheme === (settings.dashTheme||'default')))
+  document.body.dataset.titlebar = settings.titlebarStyle || 'mac'
+  document.querySelectorAll('#titlebarPills .theme-pill').forEach(p=>p.classList.toggle('sel', p.dataset.titlebar === (settings.titlebarStyle||'mac')))
 }
 function syncToggle(id,val){const el=document.getElementById(id);if(!el)return;el.classList.toggle('on',val);el.classList.toggle('off',!val)}
 async function toggleSetting(key,el){el.classList.toggle('on');el.classList.toggle('off');settings[key]=el.classList.contains('on');settings.goalHours=goalH;await window.api.saveSettings(settings)}
@@ -1317,6 +1355,11 @@ function setDashTheme(theme){
   document.querySelectorAll('#dashThemePills .theme-pill').forEach(p=>p.classList.toggle('sel',p.dataset.dashtheme===theme))
   document.body.dataset.dashTheme=theme
   settings.dashTheme=theme; settings.goalHours=goalH; window.api.saveSettings(settings)
+}
+function setTitlebarStyle(style){
+  document.querySelectorAll('#titlebarPills .theme-pill').forEach(p=>p.classList.toggle('sel',p.dataset.titlebar===style))
+  document.body.dataset.titlebar=style
+  settings.titlebarStyle=style; settings.goalHours=goalH; window.api.saveSettings(settings)
 }
 function setWidgetTheme(theme){document.querySelectorAll('#themePills .theme-pill').forEach(p=>p.classList.toggle('sel',p.dataset.theme===theme));settings.widgetTheme=theme;settings.goalHours=goalH;window.api.saveSettings(settings)}
 

@@ -23,7 +23,8 @@ function loadData() {
     settings: {
       goalHours: 3, autoTrack: true, idlePause: true,
       notifications: true, startOnBoot: false,
-      streakColor: 'green', accentColor: 'green', dashTheme: 'default', showSticky: true,
+      streakColor: 'green', accentColor: 'green', dashTheme: 'default',
+      titlebarStyle: 'mac', showSticky: true,
     }
   }
 }
