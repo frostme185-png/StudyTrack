@@ -364,15 +364,17 @@ body[data-titlebar="windows"] .wd-close:hover{background:#E81123;color:#fff}
     </div>
 
     <div class="sec-hd">Tracked Websites & Apps</div>
+    <!-- App is the default kind: in practice essentially everything tracked
+         here is a native app, so starting on Website cost a click every time. -->
     <div class="theme-pills" id="kindToggle" style="margin-bottom:10px">
-      <button class="theme-pill sel" data-kind="site" onclick="setAddKind('site')">🌐 Website</button>
-      <button class="theme-pill" data-kind="app" onclick="setAddKind('app')">🖥️ App</button>
+      <button class="theme-pill" data-kind="site" onclick="setAddKind('site')">🌐 Website</button>
+      <button class="theme-pill sel" data-kind="app" onclick="setAddKind('app')">🖥️ App</button>
     </div>
     <div class="add-row">
       <input id="siteColorIn" type="color" class="color-pick" value="#378ADD" title="Color"/>
-      <input id="siteNameIn" placeholder="Display name, e.g. Udemy" style="max-width:160px"/>
-      <input id="siteDomIn" placeholder="Domain, e.g. udemy.com"/>
-      <select id="appPickerSel" class="t-sel" style="display:none;flex:1" onchange="onAppPicked(this)"></select>
+      <input id="siteNameIn" placeholder="Display name, e.g. Anki" style="max-width:160px"/>
+      <input id="siteDomIn" placeholder="Domain, e.g. udemy.com" style="display:none"/>
+      <select id="appPickerSel" class="t-sel" style="flex:1" onchange="onAppPicked(this)"></select>
       <button class="btn" id="siteSubmitBtn" onclick="addSite()">+ Add</button>
       <button class="btn" id="siteCancelBtn" onclick="cancelSiteEdit()" style="display:none">Cancel</button>
     </div>
@@ -681,7 +683,13 @@ function gotoView(id, el) {
   // — clear every tab highlight instead of leaving a stale one lit.
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
   if (el) el.classList.add('active')
-  if (id === 'sites') { renderSiteCards(appData.sites||[], appData.sessions||[]); refreshTimerSiteSelect() }
+  if (id === 'sites') {
+    renderSiteCards(appData.sites||[], appData.sessions||[])
+    refreshTimerSiteSelect()
+    // Fill the running-app picker on arrival, since 'app' is the default kind
+    // and setAddKind() isn't run at startup (it would scan windows too early).
+    if (addKind === 'app' && !editingDomain) refreshAppPicker()
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -930,6 +938,21 @@ function colorForDomain(domain) {
   return ADHOC_PALETTE[h % ADHOC_PALETTE.length]
 }
 
+// `domain` is a storage key, not a label — app entries are stored as
+// "app:<process>". Anything user-facing goes through these so the Insights
+// text matches the names shown in Time Breakdown and the Tracking tab
+// (Insights used to print the raw "app:anki" next to a globe icon).
+// Falls back to a de-prefixed key for domains no longer in the tracked list,
+// which still have history and must stay readable.
+function siteLabel(domain) {
+  const s = (appData?.sites || []).find(x => x.domain === domain)
+  return (s && s.name) ? s.name : String(domain).replace(/^app:/, '')
+}
+function siteIcon(domain) {
+  const s = (appData?.sites || []).find(x => x.domain === domain)
+  return (s ? s.kind === 'app' : String(domain).startsWith('app:')) ? '🖥️' : '🌐'
+}
+
 function buildSiteDist(sites,sessions) {
   const thisMonth=monthStr(new Date())
   const bySite={}
@@ -1020,15 +1043,81 @@ function buildInsights(sessions) {
   }
   if (bestWd !== -1) rows.push({ ic:'🗓️', text:`You usually study the most on <b>${WD[bestWd]}</b> (avg ${secsToHM(Math.round(bestAvg))}/day).` })
 
-  // Top site this month
+  // Peak focus window — best contiguous 3-hour block across the hour buckets.
+  // Only rows carrying `hours` contribute, so the share is measured against
+  // bucketed time, not all-time: older rows predate the field and would
+  // otherwise deflate every percentage. Wraps past midnight (a 23:00 start is
+  // a real pattern), and stays silent on a flat spread, where "peak" would be
+  // an artefact of picking a maximum out of noise rather than a finding.
+  {
+    const H = Array(24).fill(0)
+    sessions.forEach(s => {
+      if (!s.hours) return
+      for (const h in s.hours) { const i = +h; if (i >= 0 && i < 24) H[i] += s.hours[h] }
+    })
+    const bucketed = H.reduce((a, b) => a + b, 0)
+    const WIN = 3
+    if (bucketed >= 2 * 3600) {
+      let bestStart = 0, bestSum = -1
+      for (let start = 0; start < 24; start++) {
+        let sum = 0
+        for (let k = 0; k < WIN; k++) sum += H[(start + k) % 24]
+        if (sum > bestSum) { bestSum = sum; bestStart = start }
+      }
+      const share = Math.round(bestSum / bucketed * 100)
+      const hh = n => String(n).padStart(2, '0') + ':00'
+      // WIN/24 of the day is what a perfectly flat spread would give (~13%).
+      if (share >= 25) {
+        rows.push({ ic:'⏰', text:`You focus best between <b>${hh(bestStart)}–${hh((bestStart + WIN) % 24)}</b> — <b>${share}%</b> of your tracked time.` })
+      }
+    }
+  }
+
+  // Habit shift — biggest move in one item's share of the month, this month
+  // vs last. Compared as a share rather than raw seconds so a month that was
+  // simply busier overall doesn't read as a change in *what* you're doing.
   const thisMonth = monthStr(new Date())
-  const bySiteMonth = {}
-  sessions.filter(s => s.date.startsWith(thisMonth)).forEach(s => { bySiteMonth[s.domain] = (bySiteMonth[s.domain]||0) + s.seconds })
-  const monthEntries = Object.entries(bySiteMonth)
+  const monthShares = mk => {
+    const by = {}; let tot = 0
+    sessions.filter(s => s.date.startsWith(mk)).forEach(s => { by[s.domain] = (by[s.domain] || 0) + s.seconds; tot += s.seconds })
+    return { by, tot }
+  }
+  const cur = monthShares(thisMonth)
+  const prev = monthShares(monthStr(new Date(today.getFullYear(), today.getMonth() - 1, 1)))
+  let shift = null
+  if (cur.tot >= 1800 && prev.tot >= 1800) {
+    // Shares are zero-sum within a month, so whatever rises pushes something
+    // else down by the same amount and the two tie constantly. Break ties
+    // toward the riser: "Anki is new and already 66%" is the thing you're
+    // actually doing now, where the mirror-image faller says the same in a
+    // less useful way.
+    const beats = (a, b) => {
+      const da = Math.abs(a.now - a.was), db = Math.abs(b.now - b.was)
+      return da !== db ? da > db : (a.now - a.was) > (b.now - b.was)
+    }
+    for (const domain of new Set([...Object.keys(cur.by), ...Object.keys(prev.by)])) {
+      const cand = {
+        domain,
+        now: Math.round((cur.by[domain] || 0) / cur.tot * 100),
+        was: Math.round((prev.by[domain] || 0) / prev.tot * 100),
+      }
+      if (!shift || beats(cand, shift)) shift = cand
+    }
+    if (shift && Math.abs(shift.now - shift.was) < 15) shift = null   // normal month-to-month wobble
+  }
+  if (shift) {
+    const name = `<b>${escapeHtml(siteLabel(shift.domain))}</b>`
+    rows.push(shift.was === 0
+      ? { ic:'✨', text:`${name} is new this month and already <b>${shift.now}%</b> of your time.` }
+      : { ic: shift.now > shift.was ? '🔼' : '🔽',
+          text:`${name} went from <b>${shift.was}%</b> of your time last month to <b>${shift.now}%</b> this month.` })
+  }
+
+  // Top item this month
+  const monthEntries = Object.entries(cur.by)
   if (monthEntries.length) {
-    const totalMonth = monthEntries.reduce((a,[,v]) => a+v, 0)
     const [topDomain, topSecs] = monthEntries.reduce((a,b) => b[1]>a[1]?b:a)
-    rows.push({ ic:'🌐', text:`<b>${escapeHtml(topDomain)}</b> makes up <b>${Math.round(topSecs/totalMonth*100)}%</b> of your study time this month (${secsToHM(topSecs)}).` })
+    rows.push({ ic: siteIcon(topDomain), text:`<b>${escapeHtml(siteLabel(topDomain))}</b> makes up <b>${Math.round(topSecs/cur.tot*100)}%</b> of your study time this month (${secsToHM(topSecs)}).` })
   }
 
   box.innerHTML = rows.length
@@ -1179,7 +1268,12 @@ function renderSiteCards(sites,sessions) {
   if(!sites.length) el.innerHTML='<span style="font-size:12px;color:var(--text3)">No websites/apps yet. Add one above!</span>'
 }
 
-let addKind = 'site'   // 'site' (website, matched by domain keyword) or 'app' (native app, matched by process name)
+// 'app' (native app, matched by process name) or 'site' (website, matched by
+// domain keyword). Defaults to 'app' — see the kindToggle markup. The initial
+// show/hide state is baked into that markup rather than calling setAddKind()
+// at startup, because setAddKind('app') kicks off a PowerShell scan of running
+// windows; that's deferred until the Tracking tab is actually opened.
+let addKind = 'app'
 
 function setAddKind(kind) {
   addKind = kind
@@ -1230,7 +1324,7 @@ function cancelSiteEdit() {
   document.getElementById('siteDomIn').value = ''
   document.getElementById('siteSubmitBtn').textContent = '+ Add'
   document.getElementById('siteCancelBtn').style.display = 'none'
-  setAddKind('site')
+  setAddKind('app')
 }
 
 async function addSite() {
